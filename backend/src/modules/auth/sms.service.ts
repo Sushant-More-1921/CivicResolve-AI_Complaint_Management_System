@@ -2,169 +2,186 @@ import { env } from '../../config/env';
 
 export interface SmsSendResult {
   sent: boolean;
-  provider: 'fast2sms' | 'twofactor' | 'twilio' | 'custom' | 'console_dev';
+  provider: 'textbee' | 'console_dev';
   message: string;
 }
 
+/**
+ * SMS SERVICE STATUS:
+ * Set to `true` to pause physical SMS dispatch via TextBee and output OTP to the terminal only.
+ * Set to `false` when ready to resume physical SMS delivery.
+ */
+export const SMS_SERVICE_PAUSED = true;
+
 export class SmsService {
+  private cachedTextBeeDeviceId: string | null = null;
+
+  /**
+   * Helper to retrieve or discover an active TextBee device ID
+   */
+  private async getTextBeeDeviceId(apiKey: string): Promise<string | undefined> {
+    if (this.cachedTextBeeDeviceId) {
+      return this.cachedTextBeeDeviceId;
+    }
+
+    try {
+      const res = await fetch('https://api.textbee.dev/api/v1/gateway/devices', {
+        headers: {
+          'x-api-key': apiKey,
+          'Accept': 'application/json',
+        },
+      });
+      if (res.ok) {
+        const json: any = await res.json();
+        const devices = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
+        if (devices.length > 0) {
+          if (env.TEXTBEE_DEVICE_ID) {
+            const configured = devices.find(
+              (d: any) => (d._id === env.TEXTBEE_DEVICE_ID || d.id === env.TEXTBEE_DEVICE_ID) && d.enabled
+            );
+            if (configured) {
+              this.cachedTextBeeDeviceId = env.TEXTBEE_DEVICE_ID;
+              return env.TEXTBEE_DEVICE_ID;
+            }
+          }
+
+          const activeDevice =
+            devices.find((d: any) => d.enabled && d.isDefault) ||
+            devices.find((d: any) => d.enabled) ||
+            devices[0];
+          const id = activeDevice?._id || activeDevice?.id;
+          if (id) {
+            this.cachedTextBeeDeviceId = id;
+            return id;
+          }
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
+    return undefined;
+  }
+
   /**
    * Dispatches OTP SMS code to the given Indian mobile number.
-   * Automatically selects the configured external provider or falls back to development simulation.
+   * Currently PAUSED per user instruction: logs OTP directly to terminal console.
    */
   public async sendOtpSms(phoneNumber: string, otpCode: string): Promise<SmsSendResult> {
     const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10);
-    const messageBody = `Your CivicResolve verification code is ${otpCode}. Valid for 5 minutes. Do not share this OTP with anyone.`;
 
-    // Always print high-visibility OTP in the developer terminal so developer can test immediately
+    // High-visibility OTP in the developer terminal console
     console.log(`
 ========================================================================
-🔑 [DEVELOPER TERMINAL - OTP DISPATCH]
+🔑 [TERMINAL OTP DISPATCH - SMS SERVICE PAUSED]
 📱 Target Mobile : +91 ${cleanPhone}
 🔢 6-Digit OTP   : ${otpCode}
 ⏳ Expiry        : 5 minutes
+🛑 SMS Gateway   : PAUSED (Terminal OTP Active)
 ========================================================================`);
 
-    // 1. Check for Fast2SMS (Popular in India)
-    if (env.FAST2SMS_API_KEY) {
+    // When paused, return terminal response immediately without calling external SMS provider
+    if (SMS_SERVICE_PAUSED) {
+      return {
+        sent: true,
+        provider: 'console_dev',
+        message: 'SMS service paused. OTP printed to terminal.',
+      };
+    }
+
+    // 1. TextBee SMS Gateway (Android SMS Gateway - https://textbee.dev)
+    if (env.TEXTBEE_API_KEY) {
+
       try {
-        console.log(`📡 [Fast2SMS] Calling API to deliver SMS to +91 ${cleanPhone}...`);
-        const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
-          method: 'POST',
-          headers: {
-            authorization: env.FAST2SMS_API_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            route: 'otp',
-            variables_values: otpCode,
-            numbers: cleanPhone,
-          }),
-        });
+        const recipientPhone = `+91${cleanPhone}`;
+        const textBeeMessage = `Hello from CivicResolve! Your sign-in PIN: ${otpCode} (valid for 5 mins)`;
+        const deviceId = env.TEXTBEE_DEVICE_ID || (await this.getTextBeeDeviceId(env.TEXTBEE_API_KEY));
 
-        const data: any = await response.json();
-        console.log(`📡 [Fast2SMS Route Response]:`, data);
+        console.log(`📡 [TextBee] Dispatching SMS OTP to ${recipientPhone} via https://api.textbee.dev/api/v1/gateway/send-sms...`);
 
-        if (data && data.return) {
-          console.log(`✅ [Fast2SMS Success] SMS delivered to carrier for +91 ${cleanPhone}`);
-          return { sent: true, provider: 'fast2sms', message: 'SMS dispatched via Fast2SMS' };
-        } else {
-          // Attempt Quick SMS fallback if OTP route was restricted
-          const fallbackRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
-            method: 'POST',
-            headers: {
-              authorization: env.FAST2SMS_API_KEY,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              route: 'q',
-              message: `Your CivicResolve verification OTP is ${otpCode}. Valid for 5 minutes.`,
-              numbers: cleanPhone,
-            }),
-          });
-          const fallbackData: any = await fallbackRes.json();
-          console.log(`📡 [Fast2SMS Quick SMS Route Response]:`, fallbackData);
+        const requestPayload: {
+          recipients: string[];
+          message: string;
+          deviceId?: string;
+          simSubscriptionId?: number;
+        } = {
+          recipients: [recipientPhone],
+          message: textBeeMessage,
+        };
+        if (deviceId) {
+          requestPayload.deviceId = deviceId;
+        }
+        if (env.TEXTBEE_SIM_SUBSCRIPTION_ID) {
+          requestPayload.simSubscriptionId = env.TEXTBEE_SIM_SUBSCRIPTION_ID;
+        }
 
-          if (fallbackData && fallbackData.return) {
-            console.log(`✅ [Fast2SMS Success] SMS delivered via Quick route to +91 ${cleanPhone}`);
-            return { sent: true, provider: 'fast2sms', message: 'SMS dispatched via Fast2SMS Quick route' };
+        const postWithRetry = async (payload: any) => {
+          try {
+            return await fetch('https://api.textbee.dev/api/v1/gateway/send-sms', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'x-api-key': env.TEXTBEE_API_KEY!,
+              },
+              body: JSON.stringify(payload),
+            });
+          } catch {
+            await new Promise((r) => setTimeout(r, 800));
+            return await fetch('https://api.textbee.dev/api/v1/gateway/send-sms', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'x-api-key': env.TEXTBEE_API_KEY!,
+              },
+              body: JSON.stringify(payload),
+            });
           }
+        };
 
-          // If Fast2SMS returned an account restriction (such as 996 or 999)
-          const reason = data?.message || fallbackData?.message || 'Fast2SMS account setup needed';
+        let response = await postWithRetry(requestPayload);
+        let data: any = await response.json().catch(() => null);
+
+        // If specific deviceId was rejected as not found, retry once without deviceId
+        if (
+          !response.ok &&
+          requestPayload.deviceId &&
+          (response.status === 404 ||
+            (typeof data?.message === 'string' && data.message.toLowerCase().includes('device')))
+        ) {
+          console.warn(
+            `⚠️ [TextBee Retry] Device ID was rejected (${data?.message || 'Not found'}). Retrying with account active default phone...`
+          );
+          delete requestPayload.deviceId;
+          response = await postWithRetry(requestPayload);
+          data = await response.json().catch(() => null);
+        }
+
+        if (response.ok && data?.data?.success !== false) {
+          const batchId = data?.data?.smsBatchId || data?.smsBatchId || 'SUCCESS';
+          console.log(`✅ [TextBee Success] SMS dispatched to ${recipientPhone} (Batch ID: ${batchId})`);
+          return { sent: true, provider: 'textbee', message: 'SMS dispatched via TextBee' };
+        } else {
+          const errMsg = data?.message || data?.error || response.statusText || 'Unknown TextBee error';
           console.log(`
-⚠️  [FAST2SMS SMS DELIVERY NOTICE]:
-   Status message: "${reason}"
+========================================================================
+⚠️  [TEXTBEE SMS DELIVERY NOTICE]:
+   Status: ${response.status} (${errMsg})
    Why SMS didn't arrive on physical phone:
-   1. Fast2SMS requires one-time account verification under "OTP Message" on fast2sms.com.
-   2. Fast2SMS API requires an initial ₹100 INR wallet recharge before sending to real numbers.
-   👉 You can use the OTP code [ ${otpCode} ] shown in the terminal above to log in successfully!
+   1. Check if TEXTBEE_API_KEY in backend/.env is valid and active.
+   2. Ensure your Android device is online with the TextBee app installed & running.
+   3. Check TextBee dashboard (https://textbee.dev) to ensure your device heartbeat is active.
+   4. Verify your phone SIM has sufficient balance/SMS pack to send texts.
+   👉 Use the OTP code [ ${otpCode} ] shown in the developer terminal above to log in immediately!
 ========================================================================`);
         }
       } catch (err) {
-        console.error('❌ [Fast2SMS Error] Failed to connect to SMS provider:', err);
+        console.error('❌ [TextBee Error] Failed to connect to TextBee:', err);
       }
     }
 
-    // 2. Check for 2Factor.in (Popular Indian OTP Gateway with Free Test Balance - https://2factor.in)
-    if (env.TWOFACTOR_API_KEY) {
-      try {
-        console.log(`📡 [2Factor.in] Dispatching OTP code to +91 ${cleanPhone}...`);
-        const response = await fetch(
-          `https://2factor.in/API/V1/${env.TWOFACTOR_API_KEY}/SMS/+91${cleanPhone}/${otpCode}`
-        );
-        const data: any = await response.json();
-        console.log(`📡 [2Factor.in Result]:`, data);
-
-        if (data && data.Status === 'Success') {
-          console.log(`✅ [2Factor.in Success] OTP SMS delivered to +91 ${cleanPhone}`);
-          return { sent: true, provider: 'twofactor' as any, message: 'SMS dispatched via 2Factor.in' };
-        } else {
-          console.warn(`⚠️ [2Factor.in Warning]:`, data?.Details || data);
-        }
-      } catch (err) {
-        console.error('❌ [2Factor.in Error] Failed to send SMS:', err);
-      }
-    }
-
-    // 3. Check for Twilio
-    if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER) {
-      try {
-        const auth = Buffer.from(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`).toString('base64');
-        const params = new URLSearchParams();
-        params.append('To', `+91${cleanPhone}`);
-        params.append('From', env.TWILIO_PHONE_NUMBER);
-        params.append('Body', messageBody);
-
-        const response = await fetch(
-          `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Basic ${auth}`,
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: params.toString(),
-          }
-        );
-
-        if (response.ok) {
-          console.log(`📡 [Twilio] Dispatched OTP ${otpCode} to +91 ${cleanPhone}`);
-          return { sent: true, provider: 'twilio', message: 'SMS dispatched via Twilio' };
-        } else {
-          const errData = await response.json();
-          console.warn(`⚠️ [Twilio Warning] Provider rejected:`, errData);
-        }
-      } catch (err) {
-        console.error('❌ [Twilio Error] Failed to send SMS:', err);
-      }
-    }
-
-    // 3. Check for Generic / Custom Provider Webhook
-    if (env.OTP_PROVIDER_URL && env.OTP_PROVIDER_KEY) {
-      try {
-        const response = await fetch(env.OTP_PROVIDER_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${env.OTP_PROVIDER_KEY}`,
-          },
-          body: JSON.stringify({
-            phoneNumber: `+91${cleanPhone}`,
-            otp: otpCode,
-            message: messageBody,
-          }),
-        });
-
-        if (response.ok) {
-          console.log(`📡 [Custom OTP Provider] Dispatched OTP ${otpCode} to +91 ${cleanPhone}`);
-          return { sent: true, provider: 'custom', message: 'SMS dispatched via Custom Gateway' };
-        }
-      } catch (err) {
-        console.error('❌ [Custom Provider Error] Failed to send SMS:', err);
-      }
-    }
-
-    // 4. Default Development / Fallback Simulation
+    // 2. Terminal Base Code / Local Development Simulation
     console.log(`📱 [CITIZEN OTP - LOCAL DEV] Mobile: +91 ${cleanPhone} | CODE: ${otpCode} | Status: Ready for verification`);
     return {
       sent: true,

@@ -23,12 +23,15 @@ import {
   Phone,
   Mail,
   AlertCircle,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/common/status-badge";
 import { PriorityBadge } from "@/components/common/priority-badge";
 import { subscribeToRealTime } from "@/lib/realtime/events";
-import { getSessionUser, getSessionToken, clearSession } from "@/lib/auth/session";
+import { getSessionUser, getSessionToken, clearSession, saveSession } from "@/lib/auth/session";
+import { updateCitizenProfileApi, deleteCitizenAccountApi, getUserProfileApi } from "@/lib/api/auth";
+import { MAHARASHTRA_DIVISIONS } from "@/components/auth/citizen-details-form";
 import {
   getMyComplaintsApi,
   TrackedComplaint,
@@ -36,15 +39,21 @@ import {
 import { Complaint, ComplaintStatus, CitizenFeedback } from "@/types/complaint";
 import { AuthUser } from "@/types/auth";
 import ROUTES from "@/config/routes";
+import { LanguageSwitcher } from "@/components/common/language-switcher";
+import { useLanguage } from "@/context/language-context";
 
 interface CitizenProfileData {
   fullName: string;
   email: string;
-  ward: string;
+  district: string;
   address: string;
+  pincode: string;
+  ward?: string;
   aadhaarMasked: string;
   smsAlerts: boolean;
 }
+
+
 
 function toComplaint(
   item: TrackedComplaint,
@@ -98,6 +107,7 @@ function toComplaint(
 
 export default function CitizenDashboardPage() {
   const router = useRouter();
+  const { t } = useLanguage();
 
   // Session & Authentication
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
@@ -118,16 +128,24 @@ export default function CitizenDashboardPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Profile State
-  const [profile, setProfile] = useState<CitizenProfileData>({
-    fullName: "Sunil R. Jadhav",
-    email: "sunil.jadhav@citizen.gov.in",
-    ward: "Ward 12, Kolhapur North (KMC)",
-    address: "142/B, Shivaji Road, Near New High School, Kolhapur",
-    aadhaarMasked: "XXXX-XXXX-4819",
-    smsAlerts: true,
+  const [profile, setProfile] = useState<CitizenProfileData>(() => {
+    const sessionUser = typeof window !== "undefined" ? getSessionUser() : null;
+    const phone = sessionUser?.mobileNumber || "";
+    const cleanDigits = phone.replace(/\D/g, "").slice(-4) || "4819";
+    return {
+      fullName: sessionUser?.name && sessionUser.name !== "Verified Citizen" ? sessionUser.name : (sessionUser?.name || "Verified Citizen"),
+      email: sessionUser?.email || "",
+      address: sessionUser?.address || "",
+      pincode: sessionUser?.pincode || "",
+      district: sessionUser?.district || MAHARASHTRA_DIVISIONS[0],
+      aadhaarMasked: `XXXX-XXXX-${cleanDigits}`,
+      smsAlerts: true,
+    };
   });
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [tempProfile, setTempProfile] = useState<CitizenProfileData>(profile);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Feedback Modal State
   const [feedbackComplaint, setFeedbackComplaint] = useState<Complaint | null>(null);
@@ -183,23 +201,67 @@ export default function CitizenDashboardPage() {
     }
 
     let isSubscribed = true;
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       if (!isSubscribed) return;
       setToken(sessionToken);
       setCurrentUser(sessionUser);
 
-      // Load persistent citizen profile from localStorage
+      // Populate from current sessionUser immediately
+      const phoneDigits = sessionUser.mobileNumber.replace(/\D/g, "").slice(-4) || "4819";
+      const initialProfile: CitizenProfileData = {
+        fullName: sessionUser.name && sessionUser.name !== "Verified Citizen" ? sessionUser.name : (sessionUser.name || "Citizen"),
+        email: sessionUser.email || "",
+        address: sessionUser.address || "",
+        pincode: sessionUser.pincode || "",
+        district: sessionUser.district || MAHARASHTRA_DIVISIONS[0],
+        aadhaarMasked: `XXXX-XXXX-${phoneDigits}`,
+        smsAlerts: true,
+      };
+
+      // Check if there is a local cache
       if (typeof window !== "undefined") {
-        const savedProfile = localStorage.getItem(`civic_profile_${sessionUser.mobileNumber}`);
+        const cleanPhone = sessionUser.mobileNumber.replace(/\D/g, "");
+        const savedProfile = localStorage.getItem(`civic_profile_${cleanPhone}`) || localStorage.getItem(`civic_profile_${sessionUser.mobileNumber}`);
         if (savedProfile) {
           try {
-            setProfile(JSON.parse(savedProfile));
+            const parsed = JSON.parse(savedProfile);
+            setProfile((prev) => ({ ...prev, ...parsed }));
           } catch {
-            // keep default
+            setProfile(initialProfile);
           }
-        } else if (sessionUser.name) {
-          setProfile((prev) => ({ ...prev, fullName: sessionUser.name || prev.fullName }));
+        } else {
+          setProfile(initialProfile);
         }
+      } else {
+        setProfile(initialProfile);
+      }
+
+      // Always fetch fresh profile directly from backend Supabase DB
+      try {
+        const freshUser = await getUserProfileApi(sessionToken);
+        if (freshUser && isSubscribed) {
+          saveSession(sessionToken, freshUser);
+          setCurrentUser(freshUser);
+          const freshDigits = freshUser.mobileNumber.replace(/\D/g, "").slice(-4) || phoneDigits;
+          const freshProfile: CitizenProfileData = {
+            fullName: freshUser.name || sessionUser.name || "Citizen",
+            email: freshUser.email || "",
+            address: freshUser.address || sessionUser.address || "",
+            pincode: freshUser.pincode || sessionUser.pincode || "",
+            district: freshUser.district || sessionUser.district || MAHARASHTRA_DIVISIONS[0],
+            aadhaarMasked: `XXXX-XXXX-${freshDigits}`,
+            smsAlerts: true,
+          };
+          setProfile(freshProfile);
+
+          if (typeof window !== "undefined") {
+            const cleanPhone = freshUser.mobileNumber.replace(/\D/g, "");
+            localStorage.setItem(`civic_profile_${cleanPhone}`, JSON.stringify(freshProfile));
+            localStorage.setItem(`civic_profile_${freshUser.mobileNumber}`, JSON.stringify(freshProfile));
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch remote profile:", err);
       }
 
       loadData(sessionUser.mobileNumber, sessionUser.id);
@@ -237,15 +299,65 @@ export default function CitizenDashboardPage() {
   };
 
   // Profile Save
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfile(tempProfile);
+
+    try {
+      const activeToken = getSessionToken() || "";
+      if (activeToken) {
+        const res = await updateCitizenProfileApi(activeToken, {
+          name: tempProfile.fullName,
+          email: tempProfile.email || undefined,
+          district: tempProfile.district,
+          address: tempProfile.address,
+          pincode: tempProfile.pincode,
+        });
+        saveSession(activeToken, res.user);
+        setCurrentUser(res.user);
+        setProfile({
+          ...tempProfile,
+          fullName: res.user.name || tempProfile.fullName,
+          email: res.user.email || tempProfile.email,
+          district: res.user.district || tempProfile.district,
+          address: res.user.address || tempProfile.address,
+          pincode: res.user.pincode || tempProfile.pincode,
+        });
+      }
+    } catch (err) {
+      console.warn("Could not sync profile to remote database:", err);
+    }
+
     if (typeof window !== "undefined" && currentUser) {
+      const cleanPhone = currentUser.mobileNumber.replace(/\D/g, "");
+      localStorage.setItem(`civic_profile_${cleanPhone}`, JSON.stringify(tempProfile));
       localStorage.setItem(`civic_profile_${currentUser.mobileNumber}`, JSON.stringify(tempProfile));
     }
     setIsProfileModalOpen(false);
     setFeedbackNotice("Citizen profile details updated successfully.");
     setTimeout(() => setFeedbackNotice(null), 4000);
+  };
+
+
+
+  // Delete Citizen Account Handler
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      const activeToken = getSessionToken() || "";
+      if (activeToken) {
+        await deleteCitizenAccountApi(activeToken);
+      }
+      clearSession();
+      setCurrentUser(null);
+      router.push("/?deleted=true");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to delete account. Please try again.";
+      setFeedbackNotice(msg);
+      setIsDeleteModalOpen(false);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Submit Feedback Handler
@@ -402,36 +514,38 @@ export default function CitizenDashboardPage() {
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-between selection:bg-[#EAF2FF] selection:text-[#0B4EA2]">
       {/* ==================== 1. TOP CIVIC HEADER ==================== */}
       <header className="w-full bg-white border-b border-[#E2E8F0] py-3 px-4 sm:px-8 sticky top-0 z-30 shadow-2xs">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link href={ROUTES.HOME} className="flex items-center gap-3">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+          <Link href={ROUTES.HOME} className="flex items-center gap-3 shrink-0">
             <div className="w-9 h-9 rounded-lg bg-[#0B4EA2] flex items-center justify-center text-white shrink-0">
               <Shield className="w-5 h-5 text-white" />
             </div>
             <div>
               <span className="block text-sm sm:text-base font-bold text-[#0F172A] leading-tight">
-                CivicResolve
+                {t("brandName")}
               </span>
               <span className="block text-[11px] text-[#64748B]">
-                Government Civic Services • Citizen Console
+                {t("portalSubtitle")}
               </span>
             </div>
           </Link>
 
           {/* Right Action Bar */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
+            <LanguageSwitcher />
+
             {currentUser && (
               <div className="flex items-center gap-2 bg-[#F8FAFC] border border-[#CBD5E1] px-3 py-1.5 rounded-lg text-xs font-semibold text-[#0F172A]">
                 <UserCheck className="w-3.5 h-3.5 text-[#0B4EA2]" />
                 <span>{currentUser.mobileNumber}</span>
                 <span className="hidden sm:inline text-[#15803D] bg-[#DCFCE7] px-1.5 py-0.2 rounded text-[10px] font-bold">
-                  VERIFIED
+                  {t("verified")}
                 </span>
               </div>
             )}
 
             <Link href={ROUTES.CITIZEN.NEW_COMPLAINT}>
               <Button variant="primary" size="sm" className="text-xs font-semibold" leftIcon={<Plus className="w-3.5 h-3.5" />}>
-                Register Complaint
+                {t("registerComplaint")}
               </Button>
             </Link>
 
@@ -443,7 +557,7 @@ export default function CitizenDashboardPage() {
                 className="text-xs text-[#64748B]"
                 leftIcon={<LogOut className="w-3.5 h-3.5" />}
               >
-                Logout
+                {t("logout")}
               </Button>
             )}
           </div>
@@ -484,10 +598,10 @@ export default function CitizenDashboardPage() {
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-lg sm:text-xl font-bold text-[#0F172A]">
-                    {profile.fullName}
+                    {profile.fullName || currentUser?.name || "Verified Citizen"}
                   </h1>
                   <span className="text-[10px] font-bold uppercase tracking-wider bg-[#DCFCE7] text-[#15803D] px-2 py-0.5 rounded border border-[#BBF7D0] flex items-center gap-1">
-                    <Check className="w-3 h-3" /> Aadhaar Verified
+                    <Check className="w-3 h-3" /> {t("aadhaarVerified", "Aadhaar Verified")}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-[#64748B]">
@@ -495,14 +609,23 @@ export default function CitizenDashboardPage() {
                     <Phone className="w-3.5 h-3.5 text-[#0B4EA2]" />
                     <span>{currentUser?.mobileNumber}</span>
                   </span>
-                  <span className="flex items-center gap-1">
-                    <Mail className="w-3.5 h-3.5 text-[#0B4EA2]" />
-                    <span>{profile.email}</span>
-                  </span>
+                  {profile.email ? (
+                    <span className="flex items-center gap-1">
+                      <Mail className="w-3.5 h-3.5 text-[#0B4EA2]" />
+                      <span>{profile.email}</span>
+                    </span>
+                  ) : null}
                   <span className="flex items-center gap-1">
                     <MapPin className="w-3.5 h-3.5 text-[#0B4EA2]" />
-                    <span>{profile.ward}</span>
+                    <span>{profile.district || "Pune"}</span>
                   </span>
+                  {profile.address && (
+                    <span className="flex items-center gap-1 text-[#475569]">
+                      <span className="text-[#94A3B8]">•</span>
+                      <span>{profile.address}</span>
+                      {profile.pincode && <span className="font-mono text-[#0B4EA2]">({profile.pincode})</span>}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -518,11 +641,11 @@ export default function CitizenDashboardPage() {
                 className="text-xs border-[#CBD5E1]"
                 leftIcon={<Edit3 className="w-3.5 h-3.5 text-[#0B4EA2]" />}
               >
-                Edit Citizen Profile
+                {t("btnEditProfile", "Edit Citizen Profile")}
               </Button>
               <Link href={ROUTES.CITIZEN.NEW_COMPLAINT}>
                 <Button variant="primary" size="sm" className="text-xs font-bold" leftIcon={<Plus className="w-3.5 h-3.5" />}>
-                  Lodge Grievance
+                  {t("btnLodgeGrievance", "Lodge Grievance")}
                 </Button>
               </Link>
             </div>
@@ -532,45 +655,45 @@ export default function CitizenDashboardPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[#E2E8F0] bg-white text-center">
             <div className="p-4">
               <span className="text-xs font-semibold text-[#64748B] uppercase tracking-wider block">
-                Total Lodged
+                {t("statTotalLodged", "Total Lodged")}
               </span>
               <span className="text-2xl font-bold text-[#0F172A] font-mono mt-1 block">
                 {stats.total}
               </span>
-              <span className="text-[11px] text-[#64748B] mt-0.5 block">Recorded Grievances</span>
+              <span className="text-[11px] text-[#64748B] mt-0.5 block">{t("statRecordedGrievances", "Recorded Grievances")}</span>
             </div>
 
             <div className="p-4">
               <span className="text-xs font-semibold text-[#B45309] uppercase tracking-wider block">
-                Under Process
+                {t("statUnderProcess", "Under Process")}
               </span>
               <span className="text-2xl font-bold text-[#D97706] font-mono mt-1 block">
                 {stats.inProgress}
               </span>
-              <span className="text-[11px] text-[#64748B] mt-0.5 block">Field Work In Progress</span>
+              <span className="text-[11px] text-[#64748B] mt-0.5 block">{t("statFieldWork", "Field Work In Progress")}</span>
             </div>
 
             <div className="p-4">
               <span className="text-xs font-semibold text-[#15803D] uppercase tracking-wider block">
-                Remediated & Verified
+                {t("statRemediated", "Remediated & Verified")}
               </span>
               <span className="text-2xl font-bold text-[#16A34A] font-mono mt-1 block">
                 {stats.resolved}
               </span>
-              <span className="text-[11px] text-[#64748B] mt-0.5 block">Official Photo Proof</span>
+              <span className="text-[11px] text-[#64748B] mt-0.5 block">{t("statOfficialPhoto", "Official Photo Proof")}</span>
             </div>
 
             <div className="p-4">
               <span className="text-xs font-semibold text-[#0B4EA2] uppercase tracking-wider block">
-                Feedback Provided
+                {t("statFeedbackProvided", "Feedback Provided")}
               </span>
               <span className="text-2xl font-bold text-[#0B4EA2] font-mono mt-1 block">
                 {stats.feedbackCount}
               </span>
               <span className="text-[11px] text-[#64748B] mt-0.5 block">
                 {stats.needsFeedbackCount > 0
-                  ? `${stats.needsFeedbackCount} Awaiting Rating`
-                  : "All Ratings Up to Date"}
+                  ? `${stats.needsFeedbackCount} ${t("statAwaitingRating", "Awaiting Rating")}`
+                  : t("statAllRatingsUpToDate", "All Ratings Up to Date")}
               </span>
             </div>
           </div>
@@ -588,7 +711,7 @@ export default function CitizenDashboardPage() {
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>Complaints & Status ({complaints.length})</span>
+            <span>{t("tabComplaints", "Complaints & Status")} ({complaints.length})</span>
           </button>
 
           <button
@@ -601,7 +724,7 @@ export default function CitizenDashboardPage() {
             }`}
           >
             <Star className="w-3.5 h-3.5" />
-            <span>My Feedback & Ratings ({stats.feedbackCount})</span>
+            <span>{t("tabFeedback", "My Feedback & Ratings")} ({stats.feedbackCount})</span>
             {stats.needsFeedbackCount > 0 && (
               <span className="w-2 h-2 rounded-full bg-[#D97706]" />
             )}
@@ -617,7 +740,7 @@ export default function CitizenDashboardPage() {
             }`}
           >
             <User className="w-3.5 h-3.5" />
-            <span>Citizen Profile & Jurisdiction</span>
+            <span>{t("tabProfile", "Citizen Profile & Jurisdiction")}</span>
           </button>
         </div>
 
@@ -636,7 +759,7 @@ export default function CitizenDashboardPage() {
                       : "bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]"
                   }`}
                 >
-                  All ({complaints.length})
+                  {t("filterAll", "All")} ({complaints.length})
                 </button>
                 <button
                   type="button"
@@ -647,7 +770,7 @@ export default function CitizenDashboardPage() {
                       : "bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]"
                   }`}
                 >
-                  Under Process ({stats.inProgress})
+                  {t("statUnderProcess", "Under Process")} ({stats.inProgress})
                 </button>
                 <button
                   type="button"
@@ -658,7 +781,7 @@ export default function CitizenDashboardPage() {
                       : "bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]"
                   }`}
                 >
-                  Resolved ({stats.resolved})
+                  {t("statusResolved", "Resolved")} ({stats.resolved})
                 </button>
                 <button
                   type="button"
@@ -669,7 +792,7 @@ export default function CitizenDashboardPage() {
                       : "bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]"
                   }`}
                 >
-                  Escalated ({stats.escalated})
+                  {t("filterCritical", "Critical Priority")} ({stats.escalated})
                 </button>
                 {stats.needsFeedbackCount > 0 && (
                   <button
@@ -1149,7 +1272,7 @@ export default function CitizenDashboardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div className="p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
                   <span className="text-[#64748B] block font-medium">Full Name</span>
-                  <span className="font-bold text-[#0F172A] mt-0.5 block">{profile.fullName}</span>
+                  <span className="font-bold text-[#0F172A] mt-0.5 block">{profile.fullName || currentUser?.name || "Verified Citizen"}</span>
                 </div>
 
                 <div className="p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
@@ -1159,23 +1282,30 @@ export default function CitizenDashboardPage() {
 
                 <div className="p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
                   <span className="text-[#64748B] block font-medium">Email Address</span>
-                  <span className="font-bold text-[#0F172A] mt-0.5 block">{profile.email}</span>
+                  <span className="font-bold text-[#0F172A] mt-0.5 block">{profile.email || "Not provided"}</span>
                 </div>
 
                 <div className="p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
-                  <span className="text-[#64748B] block font-medium">Resident Ward Jurisdiction</span>
-                  <span className="font-bold text-[#0F172A] mt-0.5 block">{profile.ward}</span>
+                  <span className="text-[#64748B] block font-medium">District / Division</span>
+                  <span className="font-bold text-[#0F172A] mt-0.5 block">{profile.district || "Pune"}</span>
                 </div>
 
                 <div className="sm:col-span-2 p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
-                  <span className="text-[#64748B] block font-medium">Residential Street Address</span>
-                  <span className="font-bold text-[#0F172A] mt-0.5 block">{profile.address}</span>
+                  <span className="text-[#64748B] block font-medium">Residential Street Address (Manual)</span>
+                  <span className="font-bold text-[#0F172A] mt-0.5 block">{profile.address || "Not provided"}</span>
+                </div>
+
+                <div className="sm:col-span-2 p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
+                  <span className="text-[#64748B] block font-medium">Postal Pincode</span>
+                  <span className="font-bold text-[#0F172A] mt-0.5 block">
+                    {profile.pincode || "Not provided"}
+                  </span>
                 </div>
               </div>
 
               <div className="pt-2 border-t border-[#E2E8F0] text-xs text-[#64748B] flex items-center justify-between">
                 <span>Account Status: <strong>Aadhaar OTP Verified</strong></span>
-                <span>Active Since: <strong>October 2026</strong></span>
+                <span>Active Since: <strong>Registered Citizen</strong></span>
               </div>
             </div>
 
@@ -1188,9 +1318,9 @@ export default function CitizenDashboardPage() {
 
               <div className="space-y-3 text-xs">
                 <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
-                  <span className="font-bold text-[#0F172A] block">Kolhapur Municipal Corporation (KMC)</span>
+                  <span className="font-bold text-[#0F172A] block">Municipal Corporation</span>
                   <span className="text-[#64748B] block">Toll-Free Control Room: 1916</span>
-                  <span className="text-[#64748B] block">Ward 12 Office: North Zone HQ</span>
+                  <span className="text-[#64748B] block">Jurisdiction: {profile.district || "Maharashtra"}</span>
                 </div>
 
                 <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
@@ -1222,63 +1352,157 @@ export default function CitizenDashboardPage() {
 
             <form onSubmit={handleSaveProfile} className="space-y-3 text-xs">
               <div>
-                <label className="font-semibold text-[#0F172A] block mb-1">Full Name</label>
+                <label className="font-semibold text-[#0F172A] block mb-1">Full Legal Name</label>
                 <input
                   type="text"
                   required
                   value={tempProfile.fullName}
                   onChange={(e) => setTempProfile({ ...tempProfile, fullName: e.target.value })}
+                  placeholder="e.g. Citizen Name"
                   className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-[#0F172A] block mb-1">Email Address</label>
+                <label className="font-semibold text-[#0F172A] block mb-1">Email Address (Optional)</label>
                 <input
                   type="email"
-                  required
                   value={tempProfile.email}
                   onChange={(e) => setTempProfile({ ...tempProfile, email: e.target.value })}
+                  placeholder="e.g. citizen@gmail.com"
                   className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-[#0F172A] block mb-1">Resident Ward / Jurisdiction</label>
-                <input
-                  type="text"
-                  required
-                  value={tempProfile.ward}
-                  onChange={(e) => setTempProfile({ ...tempProfile, ward: e.target.value })}
-                  className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
-                />
+                <label className="font-semibold text-[#0F172A] block mb-1">
+                  District / Division (Maharashtra)
+                </label>
+                <select
+                  value={tempProfile.district}
+                  onChange={(e) => setTempProfile({ ...tempProfile, district: e.target.value })}
+                  className="w-full h-9 px-2.5 rounded-lg border border-[#CBD5E1] bg-white text-xs text-[#0F172A] cursor-pointer"
+                >
+                  {tempProfile.district && !MAHARASHTRA_DIVISIONS.includes(tempProfile.district) && (
+                    <option value={tempProfile.district}>{tempProfile.district}</option>
+                  )}
+                  {MAHARASHTRA_DIVISIONS.map((div) => (
+                    <option key={div} value={div}>
+                      {div}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
-                <label className="font-semibold text-[#0F172A] block mb-1">Residential Address</label>
+                <label className="font-semibold text-[#0F172A] block mb-1">
+                  Residential Address (Manual Entry)
+                </label>
                 <textarea
                   rows={2}
                   required
                   value={tempProfile.address}
                   onChange={(e) => setTempProfile({ ...tempProfile, address: e.target.value })}
+                  placeholder="e.g. House / Flat No., Street Name, Locality"
                   className="w-full p-2.5 rounded-lg border border-[#CBD5E1] bg-white text-xs text-[#0F172A] resize-none"
                 />
               </div>
 
-              <div className="pt-3 border-t border-[#E2E8F0] flex items-center justify-end gap-2">
+              <div>
+                <label className="font-semibold text-[#0F172A] block mb-1">
+                  Postal Pincode (Manual Entry)
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={6}
+                  value={tempProfile.pincode}
+                  onChange={(e) =>
+                    setTempProfile({
+                      ...tempProfile,
+                      pincode: e.target.value.replace(/\D/g, "").slice(0, 6),
+                    })
+                  }
+                  placeholder="e.g. 411001"
+                  className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-[#E2E8F0] flex items-center justify-between gap-2">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setIsProfileModalOpen(false)}
+                  onClick={() => {
+                    setIsProfileModalOpen(false);
+                    setIsDeleteModalOpen(true);
+                  }}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs font-semibold"
+                  leftIcon={<Trash2 className="w-3.5 h-3.5" />}
                 >
-                  Cancel
+                  Delete Account
                 </Button>
-                <Button type="submit" variant="primary" size="sm" className="font-bold">
-                  Save Changes
-                </Button>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsProfileModalOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant="primary" size="sm" className="font-bold">
+                    Save Changes
+                  </Button>
+                </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== DELETE CITIZEN ACCOUNT CONFIRMATION MODAL ==================== */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-[#0F172A]">Delete Citizen Account?</h3>
+              <p className="text-xs text-[#64748B] leading-relaxed">
+                This will permanently delete your citizen profile and mobile registration from the CivicResolve municipal portal.
+              </p>
+            </div>
+
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+              ⚠️ This action is irreversible. You will stay signed out and would need to verify via OTP to register as a new citizen.
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-1/2 justify-center text-xs"
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={isDeleting}
+              >
+                Keep Account
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                className="w-1/2 justify-center text-xs bg-red-600 hover:bg-red-700 text-white font-bold"
+                onClick={handleDeleteAccount}
+                disabled={isDeleting}
+              >
+                {isDeleting ? "Deleting..." : "Yes, Delete"}
+              </Button>
+            </div>
           </div>
         </div>
       )}

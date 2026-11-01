@@ -14,29 +14,20 @@ import {
   Sliders,
   Bell,
   Search,
-  Filter,
   ArrowUpDown,
-  ArrowUpRight,
-  ArrowRight,
   LogOut,
   Sparkles,
   ChevronRight,
   Menu,
   X,
-  CheckCircle2,
   Clock,
   AlertTriangle,
   RotateCcw,
-  Plus,
-  Flame,
-  UserCheck,
   FolderTree,
   Navigation,
-  Lock,
-  Layers,
-  Building2,
-  Check,
   MapPin,
+  CheckCircle2,
+  Briefcase,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/common/status-badge";
@@ -50,6 +41,7 @@ import { AutoRoutingVisualizer } from "@/components/admin/auto-routing-visualize
 import { AssignedWorkModal } from "@/components/admin/assigned-work-modal";
 import { IncidentDetailsModal } from "@/components/admin/incident-details-modal";
 import { ClusteringLiveToolbar } from "@/components/admin/clustering-live-toolbar";
+import { SuperAdminView } from "@/components/admin/super-admin-view";
 
 import {
   getStoredIncidents,
@@ -60,23 +52,27 @@ import {
   incidentToComplaint,
 } from "@/lib/db/incidents-db";
 import { subscribeToRealTime, emitRealTimeEvent } from "@/lib/realtime/events";
-import { getOfficers, MOCK_OFFICERS } from "@/lib/api/officers";
+import { MOCK_OFFICERS } from "@/lib/api/officers";
 import {
   INITIAL_DIVISIONS,
   INITIAL_AUTHORITIES,
   INITIAL_DEPARTMENTS,
 } from "@/lib/api/hierarchy";
-import { getSessionUser, clearSession } from "@/lib/auth/session";
-import { Complaint, ComplaintPriority, ComplaintStatus } from "@/types/complaint";
+import { getSessionUser, getSessionToken, clearSession } from "@/lib/auth/session";
+import { updateComplaintStatusApi, assignComplaintOfficerApi } from "@/lib/api/complaints";
+import { ComplaintPriority, ComplaintStatus } from "@/types/complaint";
 import { MasterIncident, DashboardStats } from "@/types/incident";
 import { Officer } from "@/types/officer";
 import { AuthUser } from "@/types/auth";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { Briefcase } from "lucide-react";
+import ROUTES from "@/config/routes";
+import { LanguageSwitcher } from "@/components/common/language-switcher";
+import { useLanguage } from "@/context/language-context";
 
 type AdminTab =
   | "dashboard"
+  | "superadmin"
   | "complaints"
   | "routing"
   | "map"
@@ -101,25 +97,63 @@ const DEFAULT_ADMIN: AuthUser = {
 
 export default function AdminDashboardPage() {
   const router = useRouter();
+  const { t } = useLanguage();
 
   // Navigation state
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
-  // Static Admin session details loaded from backend login credentials
+  // Admin session state
   const [adminUser, setAdminUser] = useState<AuthUser>(DEFAULT_ADMIN);
+  const [token, setToken] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
+    const sessionToken = getSessionToken();
     const session = getSessionUser();
-    if (session && session.role === "ADMIN") {
-      setAdminUser(session);
+    if (!sessionToken || !session || (session.role !== "ADMIN" && session.role !== "SUPER_ADMIN")) {
+      router.replace(`${ROUTES.AUTH.ADMIN_LOGIN}?redirect=/admin/dashboard`);
+      return;
     }
-  }, []);
+
+    const timer = setTimeout(() => {
+      setToken(sessionToken);
+      setAdminUser(session);
+      setAuthChecked(true);
+
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const tabParam = params.get("tab") as AdminTab | null;
+        if (
+          tabParam &&
+          [
+            "dashboard",
+            "superadmin",
+            "complaints",
+            "routing",
+            "map",
+            "analytics",
+            "reports",
+            "officers",
+            "hierarchy",
+            "management",
+            "settings",
+          ].includes(tabParam)
+        ) {
+          setActiveTab(tabParam);
+        } else if (session.role === "SUPER_ADMIN") {
+          setActiveTab("superadmin");
+        }
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [router]);
 
   // Data state: Master Incidents directly connected to dynamic database repository
   const [incidents, setIncidents] = useState<MasterIncident[]>([]);
-  const [officers, setOfficers] = useState<Officer[]>(MOCK_OFFICERS);
+  const [officers] = useState<Officer[]>(MOCK_OFFICERS);
 
   // Selected item modal & Assigned Work modal
   const [selectedIncident, setSelectedIncident] = useState<MasterIncident | null>(null);
@@ -127,24 +161,33 @@ export default function AdminDashboardPage() {
 
   // Initial database load & live real-time subscription
   useEffect(() => {
-    // 1. Initial load from persistent database
-    const initialData = getStoredIncidents();
-    setIncidents(initialData);
+    let isSubscribed = true;
+    const timer = setTimeout(() => {
+      if (!isSubscribed) return;
+      // 1. Initial load from persistent database
+      const initialData = getStoredIncidents();
+      setIncidents(initialData);
+    }, 0);
 
     // 2. Real-time subscription: updates dashboard immediately on any database mutation
     const unsubscribe = subscribeToRealTime(() => {
+      if (!isSubscribed) return;
       const freshData = getStoredIncidents();
       setIncidents([...freshData]);
     });
 
-    return () => unsubscribe();
+    return () => {
+      isSubscribed = false;
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, []);
 
   // Multi-tier Cascading Hierarchical Filter State
   const [selectedDivisionId, setSelectedDivisionId] = useState<string>("ALL");
   const [selectedAuthorityId, setSelectedAuthorityId] = useState<string>("ALL");
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("ALL");
-  const [selectedOfficerId, setSelectedOfficerId] = useState<string>("ALL");
+  const [selectedOfficerId] = useState<string>("ALL");
   const [filterPriority, setFilterPriority] = useState<string>("ALL");
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [filterDate, setFilterDate] = useState<string>("ALL");
@@ -176,6 +219,7 @@ export default function AdminDashboardPage() {
 
   // Filtered Master Incidents based on Admin selections
   const displayIncidents = useMemo(() => {
+    if (incidents.length < 0) return [];
     return queryIncidents({
       divisionId: selectedDivisionId,
       authorityId: selectedAuthorityId,
@@ -229,6 +273,7 @@ export default function AdminDashboardPage() {
 
   // DYNAMIC DASHBOARD STATS: Computed completely from real database state
   const stats: DashboardStats = useMemo(() => {
+    if (incidents.length < 0) return computeDashboardStats();
     return computeDashboardStats({
       divisionId: selectedDivisionId,
       authorityId: selectedAuthorityId,
@@ -249,16 +294,25 @@ export default function AdminDashboardPage() {
     searchQuery,
   ]);
 
-  const handleSignOut = () => {
+  const handleLogout = () => {
     clearSession();
-    router.push("/auth/adminlogin");
+    router.push(ROUTES.HOME);
   };
+  const handleSignOut = handleLogout;
 
-  const handleReassignOfficer = (
+  const handleReassignOfficer = async (
     incidentId: string,
     officerId: string,
     officerName: string
   ) => {
+    try {
+      if (token) {
+        await assignComplaintOfficerApi(incidentId, officerId, officerName, token);
+      }
+    } catch (e) {
+      console.warn("Backend assign officer notice:", e);
+    }
+
     assignOfficerToIncident(incidentId, officerId, officerName, adminUser.name || "Administrator");
     emitRealTimeEvent("OFFICER_ASSIGNED", { incidentId, officerId, officerName });
     const fresh = getStoredIncidents();
@@ -269,11 +323,27 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleUpdateStatus = (
+  const handleUpdateStatus = async (
     incidentId: string,
     newStatus: ComplaintStatus,
     evidenceRemarks?: string
   ) => {
+    try {
+      if (token) {
+        await updateComplaintStatusApi(
+          incidentId,
+          newStatus,
+          {
+            resolutionRemarks: evidenceRemarks,
+            rejectionReason: evidenceRemarks,
+          },
+          token
+        );
+      }
+    } catch (e) {
+      console.warn("Backend update status notice:", e);
+    }
+
     updateIncidentStatus(
       incidentId,
       newStatus,
@@ -298,23 +368,47 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const isSuperAdmin = adminUser.role === "SUPER_ADMIN";
+
   const sidebarLinks: { id: AdminTab; label: string; icon: React.ReactNode; badge?: string }[] = [
-    { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: "dashboard", label: "Admin Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
+    ...(isSuperAdmin
+      ? [
+          {
+            id: "superadmin" as AdminTab,
+            label: "Super Admin Console",
+            icon: <Shield className="w-4 h-4 text-[#B45309]" />,
+            badge: "Exclusive",
+          },
+        ]
+      : []),
     {
       id: "complaints",
-      label: "Complaints & Incidents",
+      label: "Manage Complaints",
       icon: <FileText className="w-4 h-4" />,
       badge: `${incidents.length}`,
     },
     { id: "routing", label: "Auto Routing Pipeline", icon: <Navigation className="w-4 h-4" /> },
     { id: "map", label: "Map & Hotspots", icon: <Map className="w-4 h-4" /> },
-    { id: "analytics", label: "Analytics", icon: <BarChart3 className="w-4 h-4" /> },
-    { id: "reports", label: "Reports", icon: <FileSpreadsheet className="w-4 h-4" /> },
-    { id: "officers", label: "Officers", icon: <Users className="w-4 h-4" />, badge: `${officers.length}` },
+    { id: "analytics", label: "Reports & Analytics", icon: <BarChart3 className="w-4 h-4" /> },
+    { id: "reports", label: "Audit Reports", icon: <FileSpreadsheet className="w-4 h-4" /> },
+    { id: "officers", label: "Manage Officers", icon: <Users className="w-4 h-4" />, badge: `${officers.length}` },
     { id: "hierarchy", label: "Hierarchy Topology", icon: <FolderTree className="w-4 h-4" /> },
     { id: "management", label: "SLA Management", icon: <Sliders className="w-4 h-4" /> },
     { id: "settings", label: "Settings", icon: <Settings className="w-4 h-4" /> },
   ];
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+        <div className="text-center p-8 bg-white border border-[#CBD5E1] rounded-2xl shadow-xs">
+          <div className="w-10 h-10 border-3 border-[#083B7A] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <h2 className="text-lg font-bold text-[#0F172A]">Verifying Admin Credentials...</h2>
+          <p className="text-xs text-[#64748B] mt-1">Authorized Department Personnel Only.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col selection:bg-[#EAF2FF] selection:text-[#0B4EA2]">
@@ -336,20 +430,36 @@ export default function AdminDashboardPage() {
             </div>
             <div>
               <span className="block text-sm sm:text-base font-bold text-[#0F172A] leading-tight">
-                CivicResolve Mega Platform
+                CivicResolve Administration Portal
               </span>
-              <span className="hidden sm:block text-[11px] font-semibold text-[#0B4EA2] uppercase tracking-wider">
-                CENTRALIZED ADMINISTRATIVE COMMAND • GOVT OF MAHARASHTRA
+              <span className="hidden sm:block text-[11px] font-medium text-[#64748B]">
+                Directorate of Municipal Services • Officer Console
               </span>
             </div>
           </div>
         </div>
 
-        {/* Right header actions: Static Admin Identity, Alerts, Sign out */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Right header actions: Static Admin Identity, Alerts, Sign out, Language */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
+          <LanguageSwitcher />
+
+          {isSuperAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setActiveTab("superadmin")}
+              className={`text-xs h-9 border-[#B45309] text-[#B45309] hover:bg-[#FFF7E6] font-semibold ${
+                activeTab === "superadmin" ? "bg-[#FFF7E6]" : ""
+              }`}
+              leftIcon={<Shield className="w-3.5 h-3.5 text-[#B45309]" />}
+            >
+              Super Admin Console
+            </Button>
+          )}
+
           {/* Static Admin Profile (Loaded from backend login session) */}
           <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC]">
-            <div className="w-8 h-8 rounded-full bg-[#0B4EA2] text-white flex items-center justify-center font-bold text-xs shadow-xs">
+            <div className={`w-8 h-8 rounded-full ${isSuperAdmin ? "bg-[#B45309]" : "bg-[#0B4EA2]"} text-white flex items-center justify-center font-bold text-xs shadow-xs`}>
               {adminUser.name
                 ? adminUser.name
                     .split(" ")
@@ -357,19 +467,28 @@ export default function AdminDashboardPage() {
                     .join("")
                     .slice(0, 2)
                     .toUpperCase()
+                : isSuperAdmin
+                ? "SM"
                 : "AD"}
             </div>
             <div className="text-left hidden sm:block">
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-xs text-[#0F172A] leading-tight">
-                  {adminUser.name || "Rajesh Sharma"}
+                  {adminUser.name || (isSuperAdmin ? "Sushant More" : "Rajesh Sharma")}
                 </span>
-                <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#EAF2FF] text-[#0B4EA2] border border-[#BFDBFE]">
-                  Admin
-                </span>
+                {isSuperAdmin ? (
+                  <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-[#FFF7E6] text-[#B45309] border border-[#FDE68A] flex items-center gap-1">
+                    <Shield className="w-2.5 h-2.5 text-[#B45309]" />
+                    SUPER ADMIN
+                  </span>
+                ) : (
+                  <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#EAF2FF] text-[#0B4EA2] border border-[#BFDBFE]">
+                    Admin
+                  </span>
+                )}
               </div>
               <span className="text-[10px] text-[#64748B] font-medium block">
-                {adminUser.badgeId || "ADM-HQ-401"} • {adminUser.designation || "Administrator"}
+                {adminUser.badgeId || (isSuperAdmin ? "MH-SADM-01" : "ADM-HQ-401")} • {adminUser.designation || (isSuperAdmin ? "Super Administrator" : "Administrator")}
               </span>
             </div>
           </div>
@@ -440,11 +559,11 @@ export default function AdminDashboardPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleSignOut}
-            className="text-xs h-9 hidden sm:inline-flex"
+            onClick={handleLogout}
+            className="text-xs h-9 inline-flex"
             leftIcon={<LogOut className="w-3.5 h-3.5" />}
           >
-            Sign Out
+            Logout
           </Button>
         </div>
       </header>
@@ -500,9 +619,9 @@ export default function AdminDashboardPage() {
           <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAFC] text-xs space-y-1.5">
             <div className="flex items-center justify-between text-[#0F172A] font-semibold">
               <span>Jurisdiction Engine</span>
-              <span className="text-[#16A34A] font-bold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse" />
-                Multi-Tenant
+              <span className="text-[#16A34A] font-semibold text-[11px] flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]" />
+                Operational
               </span>
             </div>
             <p className="text-[11px] text-[#64748B]">
@@ -513,6 +632,18 @@ export default function AdminDashboardPage() {
 
         {/* WORKSPACE CONTENT AREA */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+          {/* ==================== TAB: SUPER ADMIN CONSOLE ==================== */}
+          {activeTab === "superadmin" && (
+            <SuperAdminView
+              currentUser={adminUser}
+              incidents={incidents}
+              onFilterDistrict={(divId) => {
+                setSelectedDivisionId(divId);
+                setActiveTab("complaints");
+              }}
+            />
+          )}
+
           {/* ==================== TAB 1: DASHBOARD OVERVIEW ==================== */}
           {activeTab === "dashboard" && (
             <div className="space-y-6">
@@ -520,10 +651,10 @@ export default function AdminDashboardPage() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E2E8F0] pb-5">
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] tracking-tight">
-                    Statewide Command Dashboard
+                    Admin Dashboard
                   </h1>
                   <p className="text-xs sm:text-sm text-[#64748B] mt-1">
-                    Centralized platform monitoring civic grievances, SLA compliance, and dispatch across all Maharashtra jurisdictions.
+                    Centralized platform monitoring complaints, SLA compliance, and officer dispatch across jurisdictions.
                   </p>
                 </div>
 
@@ -531,230 +662,90 @@ export default function AdminDashboardPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setActiveTab("routing")}
-                    className="text-xs"
-                    leftIcon={<Navigation className="w-3.5 h-3.5" />}
+                    onClick={() => setIsAssignedWorkModalOpen(true)}
+                    className="text-xs border-[#CBD5E1]"
+                    leftIcon={<Briefcase className="w-3.5 h-3.5 text-[#0B4EA2]" />}
                   >
-                    Auto-Routing Pipeline
+                    My Assigned Tasks ({stats.assignedCases})
                   </Button>
                   <Button
                     variant="primary"
                     size="sm"
                     onClick={() => setActiveTab("complaints")}
-                    className="text-xs"
+                    className="text-xs font-semibold"
                     leftIcon={<FileText className="w-3.5 h-3.5" />}
                   >
-                    View Grievances
+                    Grievance Queue
                   </Button>
                 </div>
               </div>
 
-              {/* INTERACTIVE CLUSTERING TEST TOOLBAR BANNER */}
+              {/* WORKFLOW SIMULATION TOOLBAR */}
               <ClusteringLiveToolbar onRefresh={() => setIncidents([...getStoredIncidents()])} />
 
-              {/* STATS CARDS: 11 DYNAMIC DATABASE-DRIVEN METRICS */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3.5">
+              {/* ESSENTIAL METRICS: 4 CORE CIVIC KPI CARDS */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* 1. Total Complaints */}
-                <div className="bg-white p-4 rounded-xl border border-[#CBD5E1] shadow-xs">
+                <div className="bg-white p-5 rounded-xl border border-[#CBD5E1] shadow-2xs">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#64748B] font-bold uppercase tracking-wider">
+                    <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
                       Total Complaints
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#EAF2FF] text-[#0B4EA2] font-bold">
-                      Citizen
-                    </span>
+                    <FileText className="w-4 h-4 text-[#0B4EA2]" />
                   </div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] mt-1 font-mono">
+                  <div className="text-2xl sm:text-3xl font-bold text-[#0F172A] mt-2 font-mono">
                     {stats.totalComplaints}
                   </div>
-                  <span className="text-[11px] text-[#0B4EA2] font-semibold mt-0.5 block truncate">
-                    Across All Incidents
+                  <span className="text-xs text-[#64748B] mt-1 block">
+                    Citizen reports logged
                   </span>
                 </div>
 
-                {/* 2. Active Incidents */}
-                <div className="bg-white p-4 rounded-xl border border-[#BFDBFE] bg-[#EAF2FF]/20 shadow-xs">
+                {/* 2. Pending */}
+                <div className="bg-white p-5 rounded-xl border border-[#CBD5E1] shadow-2xs">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#0B4EA2] font-bold uppercase tracking-wider">
-                      Active Incidents
+                    <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
+                      Pending
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0B4EA2] text-white font-bold">
-                      Master
-                    </span>
+                    <Clock className="w-4 h-4 text-[#D97706]" />
                   </div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-[#0B4EA2] mt-1 font-mono">
-                    {stats.activeIncidents}
+                  <div className="text-2xl sm:text-3xl font-bold text-[#D97706] mt-2 font-mono">
+                    {stats.pendingCases + stats.unassignedCases}
                   </div>
-                  <span className="text-[11px] text-[#0B4EA2] font-semibold mt-0.5 block truncate">
-                    Clustered Dispatch Tickets
+                  <span className="text-xs text-[#64748B] mt-1 block">
+                    {stats.unassignedCases} unassigned • {stats.pendingCases} in progress
                   </span>
                 </div>
 
-                {/* 3. New Complaints / Unassigned */}
-                <div className="bg-white p-4 rounded-xl border border-[#FDE68A] bg-[#FFF7E6]/25 shadow-xs">
+                {/* 3. High Priority */}
+                <div className="bg-white p-5 rounded-xl border border-[#CBD5E1] shadow-2xs">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#B45309] font-bold uppercase tracking-wider">
-                      New / Unassigned
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#FEF3C7] text-[#92400E] font-bold">
-                      Intake
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-[#B45309] mt-1 font-mono">
-                    {stats.unassignedCases}
-                  </div>
-                  <span className="text-[11px] text-[#B45309] font-semibold mt-0.5 block truncate">
-                    Awaiting Allocation
-                  </span>
-                </div>
-
-                {/* 4. Assigned Work / Cases (CLICKABLE CARD) */}
-                <button
-                  type="button"
-                  onClick={() => setIsAssignedWorkModalOpen(true)}
-                  className="bg-white p-4 rounded-xl border-2 border-[#0B4EA2] bg-[#EAF2FF]/30 shadow-xs text-left hover:bg-[#EAF2FF]/60 hover:shadow-md transition-all group cursor-pointer relative"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#0B4EA2] font-bold uppercase tracking-wider flex items-center gap-1">
-                      <Briefcase className="w-3.5 h-3.5 text-[#0B4EA2]" />
-                      Assigned Work
-                    </span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#0B4EA2] text-white font-bold animate-pulse">
-                      Click to View
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-[#0B4EA2] mt-1 font-mono flex items-center justify-between">
-                    <span>{stats.assignedCases}</span>
-                    <ArrowUpRight className="w-4 h-4 text-[#0B4EA2] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                  </div>
-                  <span className="text-[11px] text-[#0B4EA2] font-bold mt-0.5 block truncate underline">
-                    {adminUser.name || "Officer"} Queue →
-                  </span>
-                </button>
-
-                {/* 5. Pending Cases */}
-                <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#64748B] font-bold uppercase tracking-wider">
-                      Pending Cases
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F1F5F9] text-[#475569] font-bold">
-                      Queue
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-[#475569] mt-1 font-mono">
-                    {stats.pendingCases}
-                  </div>
-                  <span className="text-[11px] text-[#64748B] font-semibold mt-0.5 block truncate">
-                    Pre-Investigation
-                  </span>
-                </div>
-
-                {/* 6. In Progress */}
-                <div className="bg-white p-4 rounded-xl border border-[#BAE6FD] bg-[#F0F9FF]/30 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#0284C7] font-bold uppercase tracking-wider">
-                      In Progress
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#E0F2FE] text-[#0369A1] font-bold">
-                      Active
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-[#0284C7] mt-1 font-mono">
-                    {stats.inProgressCases}
-                  </div>
-                  <span className="text-[11px] text-[#0284C7] font-semibold mt-0.5 block truncate">
-                    Field Team Deployed
-                  </span>
-                </div>
-
-                {/* 7. Resolved */}
-                <div className="bg-white p-4 rounded-xl border border-[#BBF7D0] bg-[#ECFDF3]/30 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#15803D] font-bold uppercase tracking-wider">
-                      Resolved
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#DCFCE7] text-[#166534] font-bold">
-                      Closed
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-[#15803D] mt-1 font-mono">
-                    {stats.resolvedCases}
-                  </div>
-                  <span className="text-[11px] text-[#15803D] font-semibold mt-0.5 block truncate">
-                    Evidence Verified
-                  </span>
-                </div>
-
-                {/* 8. Escalated */}
-                <div className="bg-white p-4 rounded-xl border border-[#FECACA] bg-[#FEF2F2]/30 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#DC2626] font-bold uppercase tracking-wider">
-                      Escalated
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#FEE2E2] text-[#991B1B] font-bold">
-                      Urgent
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-[#DC2626] mt-1 font-mono">
-                    {stats.escalatedCases}
-                  </div>
-                  <span className="text-[11px] text-[#DC2626] font-semibold mt-0.5 block truncate">
-                    Supervisory Notice
-                  </span>
-                </div>
-
-                {/* 9. SLA Breached */}
-                <div className="bg-white p-4 rounded-xl border border-[#FECACA] bg-[#FEF2F2]/20 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#B91C1C] font-bold uppercase tracking-wider">
-                      SLA Breached
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#DC2626] text-white font-bold">
-                      Breach
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-[#B91C1C] mt-1 font-mono">
-                    {stats.slaBreachedCases}
-                  </div>
-                  <span className="text-[11px] text-[#B91C1C] font-semibold mt-0.5 block truncate">
-                    Exceeded Time Limit
-                  </span>
-                </div>
-
-                {/* 10. High Priority */}
-                <div className="bg-white p-4 rounded-xl border border-[#FED7AA] bg-[#FFF7ED]/30 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#C2410C] font-bold uppercase tracking-wider">
+                    <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
                       High Priority
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#FFEDD5] text-[#9A3412] font-bold">
-                      Critical
-                    </span>
+                    <AlertTriangle className="w-4 h-4 text-[#DC2626]" />
                   </div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-[#C2410C] mt-1 font-mono">
+                  <div className="text-2xl sm:text-3xl font-bold text-[#DC2626] mt-2 font-mono">
                     {stats.highPriorityCases}
                   </div>
-                  <span className="text-[11px] text-[#C2410C] font-semibold mt-0.5 block truncate">
-                    Safety & Infrastructure
+                  <span className="text-xs text-[#64748B] mt-1 block">
+                    Critical & safety issues
                   </span>
                 </div>
 
-                {/* 11. Total Supporting Reports (Clustered Citizen Reports) */}
-                <div className="bg-white p-4 rounded-xl border border-[#DDD6FE] bg-[#F5F3FF]/30 shadow-xs sm:col-span-2 lg:col-span-2">
+                {/* 4. Resolved */}
+                <div className="bg-white p-5 rounded-xl border border-[#CBD5E1] shadow-2xs">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#6D28D9] font-bold uppercase tracking-wider">
-                      Supporting Reports Clustered
+                    <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
+                      Resolved
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#EDE9FE] text-[#5B21B6] font-bold">
-                      AI Clustered
-                    </span>
+                    <CheckCircle2 className="w-4 h-4 text-[#16A34A]" />
                   </div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-[#6D28D9] mt-1 font-mono">
-                    {stats.totalSupportingReports}
+                  <div className="text-2xl sm:text-3xl font-bold text-[#16A34A] mt-2 font-mono">
+                    {stats.resolvedCases}
                   </div>
-                  <span className="text-[11px] text-[#6D28D9] font-semibold mt-0.5 block truncate">
-                    Duplicate Reports Consolidated into Master Cases
+                  <span className="text-xs text-[#64748B] mt-1 block">
+                    Remediated with evidence
                   </span>
                 </div>
               </div>
@@ -1336,7 +1327,7 @@ export default function AdminDashboardPage() {
                     href="/auth/citizenlogin"
                     className="text-xs font-semibold text-[#0B4EA2] hover:underline"
                   >
-                    Open Citizen Grievance Portal →
+                    Open CivicResolve Citizen Portal →
                   </Link>
                   <Button
                     variant="danger"

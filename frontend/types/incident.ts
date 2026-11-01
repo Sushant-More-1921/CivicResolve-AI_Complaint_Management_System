@@ -4,7 +4,7 @@
  * Master Incident (1) ───< Supporting Citizen Complaints (N)
  */
 
-import { ComplaintPriority, ComplaintStatus, RoutingAuditStep, TimelineEvent, ResolutionEvidence } from "./complaint";
+import { ComplaintPriority, ComplaintStatus, RoutingAuditStep, TimelineEvent, ResolutionEvidence, CitizenFeedback } from "./complaint";
 
 export interface CitizenReport {
   id: string;
@@ -75,6 +75,7 @@ export interface MasterIncident {
   timeline: TimelineEvent[];
   routingAuditTrail: RoutingAuditStep[];
   resolutionEvidence?: ResolutionEvidence;
+  feedback?: CitizenFeedback;
 }
 
 export interface DashboardStats {

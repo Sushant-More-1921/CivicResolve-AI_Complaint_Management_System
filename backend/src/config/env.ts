@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import path from 'path';
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -9,15 +10,16 @@ const envSchema = z.object({
   AI_SERVICE_URL: z.string().url().default('http://localhost:8000'),
   AI_SERVICE_TIMEOUT_MS: z.coerce.number().int().positive().default(120000),
   DATABASE_URL: z.string(),
+  DIRECT_URL: z.string().optional(),
   JWT_SECRET: z.string(),
-  // External SMS & OTP Provider configurations (optional)
-  FAST2SMS_API_KEY: z.string().optional(),
-  TWOFACTOR_API_KEY: z.string().optional(),
-  TWILIO_ACCOUNT_SID: z.string().optional(),
-  TWILIO_AUTH_TOKEN: z.string().optional(),
-  TWILIO_PHONE_NUMBER: z.string().optional(),
-  OTP_PROVIDER_URL: z.string().optional(),
-  OTP_PROVIDER_KEY: z.string().optional(),
+  // Supabase Configuration (optional direct client & storage)
+  SUPABASE_URL: z.string().optional(),
+  SUPABASE_ANON_KEY: z.string().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  // SMS Gateway configuration (TextBee)
+  TEXTBEE_API_KEY: z.string().optional(),
+  TEXTBEE_DEVICE_ID: z.string().optional(),
+  TEXTBEE_SIM_SUBSCRIPTION_ID: z.coerce.number().optional(),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),

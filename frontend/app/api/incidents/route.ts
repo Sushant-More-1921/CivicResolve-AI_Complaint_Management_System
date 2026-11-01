@@ -27,9 +27,10 @@ export async function GET(request: NextRequest) {
       stats,
       totalCount: incidents.length,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to query incidents";
     return NextResponse.json(
-      { success: false, message: error.message || "Failed to query incidents" },
+      { success: false, message },
       { status: 500 }
     );
   }
@@ -66,9 +67,10 @@ export async function POST(request: NextRequest) {
         ? `Successfully clustered into Master Incident ${result.incident.incidentNumber} (${result.incident.complaintCount} reports linked).`
         : `Created new Master Incident ${result.incident.incidentNumber}.`,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to ingest complaint";
     return NextResponse.json(
-      { success: false, message: error.message || "Failed to ingest complaint" },
+      { success: false, message },
       { status: 500 }
     );
   }

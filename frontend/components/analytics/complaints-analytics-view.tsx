@@ -4,8 +4,6 @@ import React from "react";
 import {
   BarChart,
   Bar,
-  LineChart,
-  Line,
   PieChart,
   Pie,
   Cell,
@@ -18,7 +16,7 @@ import {
   AreaChart,
   Area,
 } from "recharts";
-import { BarChart3, TrendingUp, PieChart as PieIcon, MapPin, Calendar } from "lucide-react";
+import { BarChart3, TrendingUp } from "lucide-react";
 
 // Realistic data adhering to project color system
 const CATEGORY_DATA = [
@@ -34,15 +32,6 @@ const PRIORITY_DATA = [
   { name: "HIGH", value: 310, color: "#F59E0B" },      // Orange
   { name: "MEDIUM", value: 580, color: "#0B4EA2" },    // Blue
   { name: "LOW", value: 249, color: "#16A34A" },       // Green
-];
-
-const STATUS_DATA = [
-  { status: "SUBMITTED", count: 85, color: "#0B4EA2" },
-  { status: "VALIDATING", count: 42, color: "#5B21B6" },
-  { status: "ASSIGNED", count: 110, color: "#0B4EA2" },
-  { status: "IN_PROGRESS", count: 215, color: "#F59E0B" },
-  { status: "RESOLVED", count: 680, color: "#16A34A" },
-  { status: "ESCALATED", count: 24, color: "#DC2626" },
 ];
 
 const TREND_DATA = [

@@ -3,16 +3,15 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Sparkles,
   PlusCircle,
   UserCheck,
   CheckCircle2,
   Clock,
   RotateCcw,
-  Zap,
   Layers,
   ChevronDown,
   ChevronUp,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   ingestCitizenComplaint,
@@ -59,7 +58,7 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
 
     onRefresh();
     showNotice(
-      `⚡ CLUSTER MATCH: ${randomCitizen}'s report linked into ${result.incident.incidentNumber}. Complaint count increased to ${result.incident.complaintCount}. Active Incidents count stayed unchanged!`
+      `Cluster Matched: Report linked to ${result.incident.incidentNumber}. Complaint count updated to ${result.incident.complaintCount}.`
     );
   };
 
@@ -83,7 +82,7 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
 
     onRefresh();
     showNotice(
-      `⚡ NEW INCIDENT CREATED: ${result.incident.incidentNumber} lodged at ${result.incident.location}. Active Incidents +1, Unassigned +1.`
+      `New Grievance Registered: ${result.incident.incidentNumber} lodged at ${result.incident.location}.`
     );
   };
 
@@ -93,15 +92,15 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
     const unassigned = all.find((i) => !i.assignedOfficerId && i.status !== "RESOLVED" && i.status !== "CLOSED");
 
     if (!unassigned) {
-      showNotice("All current active incidents already have assigned officers.");
+      showNotice("All active complaints currently have assigned officers.");
       return;
     }
 
-    assignOfficerToIncident(unassigned.id, "off-1", "R. K. Patil", "Live Simulation Controller");
+    assignOfficerToIncident(unassigned.id, "off-1", "R. K. Patil", "Administrative Dispatch Controller");
     emitRealTimeEvent("OFFICER_ASSIGNED", { incidentId: unassigned.id });
     onRefresh();
     showNotice(
-      `⚡ OFFICER ASSIGNED: ${unassigned.incidentNumber} allocated to Officer R. K. Patil. (Assigned Cases +1, Unassigned Cases -1).`
+      `Assigned: ${unassigned.incidentNumber} allocated to Officer R. K. Patil.`
     );
   };
 
@@ -111,15 +110,15 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
     const pending = all.find((i) => i.status === "ASSIGNED" || i.status === "SUBMITTED");
 
     if (!pending) {
-      showNotice("No pending cases available to move to In Progress.");
+      showNotice("No pending complaints available to transition to In Progress.");
       return;
     }
 
-    updateIncidentStatus(pending.id, "IN_PROGRESS", undefined, "Field Unit Update");
+    updateIncidentStatus(pending.id, "IN_PROGRESS", undefined, "Field Unit Verification");
     emitRealTimeEvent("STATUS_CHANGED", { incidentId: pending.id, status: "IN_PROGRESS" });
     onRefresh();
     showNotice(
-      `⚡ WORK STARTED: ${pending.incidentNumber} changed from Pending to In Progress. (Pending Cases -1, In Progress +1).`
+      `Status Updated: ${pending.incidentNumber} changed from Pending to In Progress.`
     );
   };
 
@@ -129,7 +128,7 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
     const inProg = all.find((i) => i.status === "IN_PROGRESS");
 
     if (!inProg) {
-      showNotice("No case currently in IN_PROGRESS state to resolve.");
+      showNotice("No complaint currently in In-Progress state to resolve.");
       return;
     }
 
@@ -138,15 +137,16 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
       "RESOLVED",
       {
         imageUrl: "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80",
-        remarks: "Emergency repair finalized and verified by inspector.",
-        uploadedBy: "Field Inspection Squad",
+        remarks: "Area cleaned by municipal sanitation crew. Photo uploaded.",
+        uploadedBy: "Inspector R. K. Patil",
       },
-      "Field Verification"
+      "On-site Remediation Complete"
     );
-    emitRealTimeEvent("CASE_RESOLVED", { incidentId: inProg.id });
+
+    emitRealTimeEvent("STATUS_CHANGED", { incidentId: inProg.id, status: "RESOLVED" });
     onRefresh();
     showNotice(
-      `⚡ CASE RESOLVED: ${inProg.incidentNumber} verified and closed! (In Progress -1, Resolved +1, Active Incidents -1).`
+      `Resolved: ${inProg.incidentNumber} marked as Resolved with on-site evidence.`
     );
   };
 
@@ -155,28 +155,28 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
     resetDatabaseToSeed();
     emitRealTimeEvent("DATABASE_RESET");
     onRefresh();
-    showNotice("Database reset to baseline state (Kolhapur garbage cluster reset to 25 reports).");
+    showNotice("Database restored to initial baseline seed state.");
   };
 
   return (
-    <div className="bg-gradient-to-r from-[#0B4EA2] via-[#083B7A] to-[#1E3A8A] rounded-xl text-white shadow-md overflow-hidden">
-      {/* Top Banner Row */}
-      <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="bg-white border border-[#CBD5E1] rounded-xl text-[#0F172A] shadow-2xs overflow-hidden">
+      {/* Top Bar Row */}
+      <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#F8FAFC]">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white shrink-0">
-            <Zap className="w-4 h-4 text-[#FDE68A]" />
+          <div className="w-8 h-8 rounded-lg bg-[#E2E8F0] text-[#0F172A] flex items-center justify-center shrink-0">
+            <SlidersHorizontal className="w-4 h-4 text-[#0B4EA2]" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-xs sm:text-sm tracking-tight">
-                Live Complaint Clustering & Real-Time Dashboard Engine
+              <span className="font-bold text-xs sm:text-sm text-[#0F172A]">
+                Workflow & Simulation Controls
               </span>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#16A34A] text-white animate-pulse">
-                Active Sync
+              <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-[#EAF2FF] text-[#0B4EA2] border border-[#BFDBFE]">
+                Connected
               </span>
             </div>
-            <p className="text-[11px] text-white/80">
-              Database-driven counts update automatically on every complaint ingestion, clustering match, assignment, and status change.
+            <p className="text-[11px] text-[#64748B]">
+              Simulate citizen submissions, automated clustering, and officer status transitions.
             </p>
           </div>
         </div>
@@ -185,10 +185,9 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
           <button
             type="button"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-colors"
+            className="text-xs border border-[#CBD5E1] bg-white hover:bg-[#F1F5F9] text-[#334155] px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-colors"
           >
-            <Sparkles className="w-3.5 h-3.5 text-[#FDE68A]" />
-            <span>{isExpanded ? "Hide Test Controls" : "Test Live Clustering"}</span>
+            <span>{isExpanded ? "Hide Test Controls" : "Test Workflow Controls"}</span>
             {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
         </div>
@@ -196,15 +195,12 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
 
       {/* Real-time Notification Banner */}
       {notification && (
-        <div className="bg-[#FEF3C7] text-[#92400E] px-4 py-2 text-xs font-semibold border-t border-[#FDE68A] flex items-center justify-between animate-in fade-in duration-150">
-          <div className="flex items-center gap-2">
-            <Zap className="w-3.5 h-3.5 text-[#D97706] shrink-0" />
-            <span>{notification}</span>
-          </div>
+        <div className="bg-[#EFF6FF] text-[#1E40AF] px-4 py-2 text-xs font-medium border-t border-[#BFDBFE] flex items-center justify-between">
+          <span>{notification}</span>
           <button
             type="button"
             onClick={() => setNotification(null)}
-            className="text-[#92400E] hover:text-black font-bold ml-2"
+            className="text-[#1E40AF] hover:text-[#0F172A] font-bold ml-2"
           >
             ✕
           </button>
@@ -213,9 +209,9 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
 
       {/* Expanded Interactive Simulation Panel */}
       {isExpanded && (
-        <div className="bg-[#052857] p-4 border-t border-white/10 space-y-3 animate-in fade-in duration-150">
-          <div className="text-[11px] text-white/70">
-            Click any button below to trigger real database mutations and watch the dashboard cards increment/decrement instantly:
+        <div className="p-4 border-t border-[#E2E8F0] bg-white space-y-3">
+          <div className="text-[11px] text-[#64748B]">
+            Execute workflow actions to verify live data updates across dashboard metrics:
           </div>
 
           <div className="flex items-center gap-2 flex-wrap text-xs">
@@ -224,10 +220,10 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
               variant="outline"
               size="sm"
               onClick={handleSimulateClusterDuplicate}
-              className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs h-8"
-              leftIcon={<Layers className="w-3.5 h-3.5 text-[#DDD6FE]" />}
+              className="text-xs h-8 border-[#CBD5E1] text-[#334155]"
+              leftIcon={<Layers className="w-3.5 h-3.5 text-[#0B4EA2]" />}
             >
-              +1 Neighbor Report (Cluster into Kolhapur Garbage)
+              +1 Duplicate Report (Cluster Test)
             </Button>
 
             {/* 2. Brand New Incident */}
@@ -235,10 +231,10 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
               variant="outline"
               size="sm"
               onClick={handleSimulateNewIncident}
-              className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs h-8"
-              leftIcon={<PlusCircle className="w-3.5 h-3.5 text-[#BBF7D0]" />}
+              className="text-xs h-8 border-[#CBD5E1] text-[#334155]"
+              leftIcon={<PlusCircle className="w-3.5 h-3.5 text-[#16A34A]" />}
             >
-              +1 Brand New Problem (Active Incidents +1)
+              +1 New Grievance
             </Button>
 
             {/* 3. Assign Case */}
@@ -246,10 +242,10 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
               variant="outline"
               size="sm"
               onClick={handleSimulateAssign}
-              className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs h-8"
-              leftIcon={<UserCheck className="w-3.5 h-3.5 text-[#93C5FD]" />}
+              className="text-xs h-8 border-[#CBD5E1] text-[#334155]"
+              leftIcon={<UserCheck className="w-3.5 h-3.5 text-[#0B4EA2]" />}
             >
-              Assign Case (Assigned +1, Unassigned -1)
+              Assign Officer
             </Button>
 
             {/* 4. Progress Case */}
@@ -257,10 +253,10 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
               variant="outline"
               size="sm"
               onClick={handleSimulateProgress}
-              className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs h-8"
-              leftIcon={<Clock className="w-3.5 h-3.5 text-[#FDE68A]" />}
+              className="text-xs h-8 border-[#CBD5E1] text-[#334155]"
+              leftIcon={<Clock className="w-3.5 h-3.5 text-[#D97706]" />}
             >
-              Start Work (Pending -1, In Progress +1)
+              Mark In Progress
             </Button>
 
             {/* 5. Resolve Case */}
@@ -268,10 +264,10 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
               variant="outline"
               size="sm"
               onClick={handleSimulateResolve}
-              className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs h-8"
-              leftIcon={<CheckCircle2 className="w-3.5 h-3.5 text-[#86EFAC]" />}
+              className="text-xs h-8 border-[#CBD5E1] text-[#334155]"
+              leftIcon={<CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />}
             >
-              Resolve Case (In Progress -1, Resolved +1)
+              Resolve Complaint
             </Button>
 
             {/* 6. Reset */}
@@ -279,10 +275,10 @@ export function ClusteringLiveToolbar({ onRefresh }: ClusteringLiveToolbarProps)
               variant="ghost"
               size="sm"
               onClick={handleReset}
-              className="text-white/70 hover:text-white hover:bg-white/10 text-xs h-8 ml-auto"
+              className="text-[#64748B] hover:text-[#0F172A] text-xs h-8 ml-auto"
               leftIcon={<RotateCcw className="w-3 h-3" />}
             >
-              Reset Baseline
+              Reset Data
             </Button>
           </div>
         </div>

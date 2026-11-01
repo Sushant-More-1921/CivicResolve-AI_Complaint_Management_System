@@ -4,14 +4,11 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
+  ArrowLeft,
   Shield,
   Edit2,
-  Lock,
   CheckCircle2,
   KeyRound,
-  Sparkles,
-  Building2,
-  ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -41,7 +38,6 @@ export function AdminLoginCard() {
   const [isResending, setIsResending] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
-  const [demoHint, setDemoHint] = useState<string | null>(null);
   const [hasOtpError, setHasOtpError] = useState<boolean>(false);
 
   // STEP 1: Send Admin Security OTP
@@ -59,9 +55,6 @@ export function AdminLoginCard() {
     try {
       const response = await sendAdminOtpApi(cleanNumber);
       setOtpSessionId(response.otpSessionId || "");
-      if (response.devOtpHint) {
-        setDemoHint(response.devOtpHint);
-      }
       setSuccessNotice(`Authentication token dispatched to ${maskMobileNumber(cleanNumber)}`);
       setStep("OTP_INPUT");
       setOtp("");
@@ -209,6 +202,17 @@ export function AdminLoginCard() {
               autoFocus
             />
 
+            <div className="flex items-center justify-between text-xs pt-0.5">
+              <span className="text-[#64748B]">Official Admin Phone:</span>
+              <button
+                type="button"
+                onClick={() => setMobileNumber("9822012345")}
+                className="font-mono text-[#0B4EA2] bg-[#EAF2FF] hover:bg-[#dbeafe] px-2 py-0.5 rounded font-bold transition-colors"
+              >
+                9822012345 (Rajesh Sharma)
+              </button>
+            </div>
+
             <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] flex items-start gap-2.5 text-xs text-[#64748B]">
               <KeyRound className="w-4 h-4 text-[#0B4EA2] shrink-0 mt-0.5" />
               <span>
@@ -288,19 +292,6 @@ export function AdminLoginCard() {
               disabled={isLoading}
             />
 
-            {demoHint && (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[#F3E8FF] border border-[#DDD6FE] text-[#5B21B6] text-xs">
-                <Sparkles className="w-4 h-4 shrink-0" />
-                <div className="text-left">
-                  <span className="font-semibold">Admin Demo:</span> Enter Security OTP{" "}
-                  <code className="bg-white/80 px-1.5 py-0.5 rounded font-mono font-bold text-[#5B21B6] border border-[#DDD6FE]">
-                    {demoHint}
-                  </code>{" "}
-                  to grant access to the Admin Dashboard.
-                </div>
-              </div>
-            )}
-
             <Button
               type="submit"
               variant="primary"
@@ -322,10 +313,10 @@ export function AdminLoginCard() {
             className="text-[#0B4EA2] hover:text-[#083B7A] font-semibold flex items-center gap-1.5 hover:underline"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            Switch to Citizen Grievance Portal
+            Switch to CivicResolve Citizen Portal
           </Link>
           <span className="text-[#64748B]">
-            Complaint Intelligence Platform • Government Administrator Portal
+            CivicResolve • Government Administrator Portal
           </span>
         </div>
       </div>

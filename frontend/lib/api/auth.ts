@@ -1,7 +1,6 @@
 /**
  * Authentication API Service
- * Modular client for OTP sending, verification, and session persistence.
- * Ready for drop-in backend connection via NEXT_PUBLIC_API_URL.
+ * Connects directly to backend /api/v1/auth endpoints.
  */
 
 import {
@@ -11,10 +10,7 @@ import {
 } from "@/types/auth";
 import { isValidIndianMobile, maskMobileNumber } from "@/lib/validations/auth";
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/+$/, "");
-const API_ROOT = API_BASE_URL.endsWith("/api/v1")
-  ? API_BASE_URL
-  : `${API_BASE_URL}/api/v1`;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 /**
  * Standard simulated delay for smooth UX loading states when backend is offline
@@ -23,108 +19,165 @@ const simulateDelay = (ms = 750) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Send OTP to a Citizen mobile number.
+ * Send real OTP to a Citizen mobile number via backend API.
  */
 export async function sendOtpApi(mobileNumber: string): Promise<SendOtpResponse> {
-  const cleanNumber = mobileNumber.replace(/\D/g, "");
+  let cleanNumber = mobileNumber.replace(/\D/g, "");
+  if (cleanNumber === "83080934906") cleanNumber = "8380934906";
 
   if (!isValidIndianMobile(cleanNumber)) {
     throw new Error("Invalid mobile number. Must be a 10-digit Indian number starting with 6-9.");
   }
 
-  if (API_ROOT) {
-    const res = await fetch(`${API_ROOT}/auth/send-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phoneNumber: `+91${cleanNumber}` }),
-    });
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/send-otp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phoneNumber: cleanNumber }),
+  });
 
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || "Failed to send OTP. Please try again.");
-    }
-    return {
-      ...data,
-      maskedMobile: maskMobileNumber(cleanNumber),
-    };
-  }
-
-  await simulateDelay(800);
-
-  if (cleanNumber === "9000000000") {
-    throw new Error("SMS gateway service temporarily unavailable. Please try again later.");
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to send OTP. Please try again.");
   }
 
   return {
     success: true,
-    message: `OTP sent successfully to ${maskMobileNumber(cleanNumber)}`,
-    expiresInSeconds: 60,
+    message: data.message || `OTP sent successfully to ${maskMobileNumber(cleanNumber)}`,
+    expiresInSeconds: data.expiresInSeconds || 300,
     maskedMobile: maskMobileNumber(cleanNumber),
-    otpSessionId: `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    devOtpHint: "123456",
+    otpSessionId: data.otpSessionId,
+    devOtpHint: data.devOtpHint,
   };
 }
 
 /**
- * Verify Citizen 6-digit OTP.
+ * Verify Citizen 6-digit OTP against backend database.
  */
 export async function verifyOtpApi(
   mobileNumber: string,
   otp: string,
   otpSessionId?: string
 ): Promise<VerifyOtpResponse> {
-  const cleanNumber = mobileNumber.replace(/\D/g, "");
+  let cleanNumber = mobileNumber.replace(/\D/g, "");
+  if (cleanNumber === "83080934906") cleanNumber = "8380934906";
   const cleanOtp = otp.trim();
 
   if (cleanOtp.length !== 6) {
     throw new Error("Verification code must be exactly 6 digits.");
   }
 
-  if (API_ROOT) {
-    const res = await fetch(`${API_ROOT}/auth/verify-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        phoneNumber: `+91${cleanNumber}`,
-        otp: cleanOtp,
-        otpSessionId,
-      }),
-    });
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/verify-otp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      phoneNumber: cleanNumber,
+      otp: cleanOtp,
+      otpSessionId,
+    }),
+  });
 
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || "Invalid or expired OTP. Please try again.");
-    }
-    return {
-      ...data,
-      user: {
-        ...data.user,
-        mobileNumber: data.user.phoneNumber || data.user.mobileNumber,
-        isVerified: true,
-      },
-    };
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Invalid or expired OTP code.");
   }
 
-  await simulateDelay(850);
-
-  if (cleanOtp === "000000" || (cleanOtp !== "123456" && cleanOtp !== "654321")) {
-    throw new Error("Invalid OTP code. Please check the 6 digits or click Resend OTP.");
-  }
-
-  const mockUser: AuthUser = {
-    id: `usr_${Date.now().toString(36)}`,
-    mobileNumber: `+91${cleanNumber}`,
-    role: "CITIZEN",
-    name: "Verified Citizen",
+  const authUser: AuthUser = {
+    id: data.user.id,
+    mobileNumber: data.user.phoneNumber,
+    role: data.user.role || "CITIZEN",
+    name: data.user.name || "",
+    email: data.user.email || "",
+    district: data.user.district || "Kolhapur",
+    ward: data.user.ward || "",
+    address: data.user.address || "",
+    pincode: data.user.pincode || "",
     isVerified: true,
-    createdAt: new Date().toISOString(),
+    profileCompleted: data.isNewUser === false,
+    createdAt: data.user.createdAt || new Date().toISOString(),
+  };
+
+  const isNew = Boolean(data.isNewUser);
+
+  return {
+    success: true,
+    message: data.message || "Mobile number verified successfully.",
+    token: data.token,
+    isNewUser: isNew,
+    user: authUser,
+  };
+}
+
+/**
+ * Update citizen profile details (Name, Address, Ward, Pincode, Email)
+ */
+export async function updateCitizenProfileApi(
+  token: string,
+  profile: {
+    name: string;
+    email?: string;
+    district?: string;
+    ward?: string;
+    address?: string;
+    pincode?: string;
+  }
+): Promise<{ success: boolean; message: string; user: AuthUser }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/users/profile`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(profile),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to update profile details.");
+  }
+
+  const updatedUser: AuthUser = {
+    id: data.data.id,
+    mobileNumber: data.data.phoneNumber,
+    role: data.data.role || "CITIZEN",
+    name: data.data.name || "",
+    email: data.data.email || "",
+    district: data.data.district || "Kolhapur",
+    ward: data.data.ward || "",
+    address: data.data.address || "",
+    pincode: data.data.pincode || "",
+    isVerified: true,
+    profileCompleted: true,
+    createdAt: data.data.createdAt,
   };
 
   return {
     success: true,
-    message: "Mobile number verified successfully.",
-    token: `cip_jwt_${Math.random().toString(36).substring(2)}_${Date.now()}`,
-    user: mockUser,
+    message: data.message || "Citizen profile saved successfully.",
+    user: updatedUser,
+  };
+}
+
+/**
+ * Delete citizen account and purge personal records permanently
+ */
+export async function deleteCitizenAccountApi(
+  token: string
+): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/users/account`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to delete account.");
+  }
+
+  return {
+    success: true,
+    message: data.message || "Account deleted successfully.",
   };
 }
 
@@ -136,113 +189,114 @@ export async function resendOtpApi(mobileNumber: string): Promise<SendOtpRespons
 }
 
 /**
- * Send OTP for Administrator Login.
- * Verifies mobile number against admin authorized clearance.
+ * Register a new Citizen via backend API.
+ */
+export async function registerCitizenApi(data: {
+  phoneNumber: string;
+  name?: string;
+  email?: string;
+}): Promise<{ success: boolean; message: string; data: { id: string } }> {
+  const cleanNumber = data.phoneNumber.replace(/\D/g, "");
+
+  if (!isValidIndianMobile(cleanNumber)) {
+    throw new Error("Invalid mobile number. Must be a 10-digit Indian number starting with 6-9.");
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      phoneNumber: cleanNumber,
+      name: data.name,
+      email: data.email,
+    }),
+  });
+
+  const resData = await res.json();
+  if (!res.ok) {
+    throw new Error(resData.message || "Registration failed.");
+  }
+
+  return resData;
+}
+
+/**
+ * Send OTP for Administrator Login (verified against authorized directory).
  */
 export async function sendAdminOtpApi(mobileNumber: string): Promise<SendOtpResponse> {
-  const cleanNumber = mobileNumber.replace(/\D/g, "");
+  let cleanNumber = mobileNumber.replace(/\D/g, "");
+  if (cleanNumber === "83080934906") cleanNumber = "8380934906";
 
   if (!isValidIndianMobile(cleanNumber)) {
     throw new Error("Invalid administrative mobile number. Must be a 10-digit Indian number.");
   }
 
-  if (API_ROOT) {
-    const res = await fetch(`${API_ROOT}/auth/admin/send-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phoneNumber: `+91${cleanNumber}` }),
-    });
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/admin/send-otp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phoneNumber: cleanNumber }),
+  });
 
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || "Admin authentication failed. Unauthorized number.");
-    }
-    return {
-      ...data,
-      maskedMobile: maskMobileNumber(cleanNumber),
-    };
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Admin authentication failed. Unauthorized number.");
   }
-
-  await simulateDelay(850);
-
-  // Simulated unauthorized number for testing admin access denial
-  if (cleanNumber === "9999999999") {
-    throw new Error("Access Denied: This mobile number is not registered in the Admin Directorate Directory.");
-  }
-
   return {
     success: true,
-    message: `Security OTP sent to Authorized Admin ${maskMobileNumber(cleanNumber)}`,
-    expiresInSeconds: 60,
+    message: data.message || `Security OTP sent to Authorized Officer ${maskMobileNumber(cleanNumber)}`,
+    expiresInSeconds: data.expiresInSeconds || 300,
     maskedMobile: maskMobileNumber(cleanNumber),
-    otpSessionId: `adm_sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    devOtpHint: "123456",
+    otpSessionId: data.otpSessionId,
   };
 }
 
 /**
- * Verify Administrator OTP and return Admin Session.
+ * Verify Administrator OTP against backend database.
  */
 export async function verifyAdminOtpApi(
   mobileNumber: string,
   otp: string,
   otpSessionId?: string
 ): Promise<VerifyOtpResponse> {
-  const cleanNumber = mobileNumber.replace(/\D/g, "");
+  let cleanNumber = mobileNumber.replace(/\D/g, "");
+  if (cleanNumber === "83080934906") cleanNumber = "8380934906";
   const cleanOtp = otp.trim();
 
   if (cleanOtp.length !== 6) {
     throw new Error("Administrative 2FA code must be exactly 6 digits.");
   }
 
-  if (API_ROOT) {
-    const res = await fetch(`${API_ROOT}/auth/admin/verify-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        phoneNumber: `+91${cleanNumber}`,
-        otp: cleanOtp,
-        otpSessionId,
-      }),
-    });
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/admin/verify-otp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      phoneNumber: cleanNumber,
+      otp: cleanOtp,
+      otpSessionId,
+    }),
+  });
 
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || "Invalid Admin OTP credentials.");
-    }
-    return {
-      ...data,
-      user: {
-        ...data.user,
-        mobileNumber: data.user.phoneNumber || data.user.mobileNumber,
-        isVerified: true,
-      },
-    };
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Invalid Admin OTP credentials.");
   }
 
-  await simulateDelay(900);
-
-  if (cleanOtp === "000000" || (cleanOtp !== "123456" && cleanOtp !== "654321")) {
-    throw new Error("Invalid Administrative Security Code. Verification failed.");
-  }
-
-  const mockAdminUser: AuthUser = {
-    id: `adm_${Date.now().toString(36)}`,
-    mobileNumber: `+91${cleanNumber}`,
-    role: "ADMIN",
-    name: "Rajesh Sharma",
-    designation: "Chief Grievance Redressal Administrator",
-    department: "Municipal Affairs & Intelligence Directorate",
-    badgeId: "ADM-HQ-401",
+  const authUser: AuthUser = {
+    id: data.user.id,
+    mobileNumber: data.user.phoneNumber,
+    role: data.user.role || "ADMIN",
+    name: data.user.name || "Administrator",
+    designation: data.user.designation || "Grievance Officer",
+    department: data.user.department?.name || data.user.departmentName,
     isVerified: true,
-    createdAt: new Date().toISOString(),
+    createdAt: data.user.createdAt || new Date().toISOString(),
   };
 
   return {
     success: true,
-    message: "Administrative clearance verified successfully.",
-    token: `cip_adm_jwt_${Math.random().toString(36).substring(2)}_${Date.now()}`,
-    user: mockAdminUser,
+    message: data.message || "Administrative clearance verified successfully.",
+    token: data.token,
+    user: authUser,
   };
 }
 
@@ -252,3 +306,45 @@ export async function verifyAdminOtpApi(
 export async function resendAdminOtpApi(mobileNumber: string): Promise<SendOtpResponse> {
   return sendAdminOtpApi(mobileNumber);
 }
+
+/**
+ * Fetch authenticated user profile from backend.
+ */
+export async function getUserProfileApi(token: string): Promise<AuthUser | null> {
+  if (!token) return null;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/users/profile`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      if (json.data) {
+        return {
+          id: json.data.id,
+          mobileNumber: json.data.phoneNumber,
+          role: json.data.role || "CITIZEN",
+          name: json.data.name || "",
+          email: json.data.email || "",
+          district: json.data.district || "Kolhapur",
+          ward: json.data.ward || "",
+          address: json.data.address || "",
+          pincode: json.data.pincode || "",
+          profileCompleted: json.data.profileCompleted,
+          isVerified: true,
+          createdAt: json.data.createdAt,
+        };
+      }
+    }
+  } catch (e) {
+    console.warn("Error fetching user profile:", e);
+  }
+
+  return null;
+}
+

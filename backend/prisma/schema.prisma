@@ -3,120 +3,186 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
-  id          String   @id @default(uuid())
-  phoneNumber String   @unique
-  name        String?
-  email       String?  @unique
-  designation String?
-  role        Role     @default(CITIZEN)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String      @id @default(uuid())
+  phoneNumber  String      @unique
+  name         String?
+  email        String?     @unique
+  designation  String?
+  role         String      @default("CITIZEN") // CITIZEN | OFFICER | ADMIN | SUPER_ADMIN
+  avatarUrl    String?
+  district     String?     @default("Kolhapur")
+  ward         String?
+  address      String?
+  pincode      String?
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
   complaints   Complaint[]
-}
+  notifications Notification[]
 
-enum Role {
-  CITIZEN
-  OFFICER
-  ADMIN
-  SUPER_ADMIN
+  @@index([phoneNumber])
+  @@index([role])
 }
 
 model Department {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  code        String?  @unique
-  description String?
-  users       User[]
-  officers    Officer[]
-  complaints  Complaint[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String      @id @default(uuid())
+  name            String      @unique
+  code            String?     @unique
+  description     String?
+  contactEmail    String?
+  contactPhone    String?
+  headOfficerName String?
+  users           User[]
+  officers        Officer[]
+  complaints      Complaint[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([name])
 }
 
 model Officer {
-  id           String   @id @default(uuid())
-  name         String
-  phoneNumber  String   @unique
-  designation  String?
-  badgeId      String?  @unique
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id])
-  activeCases  Int      @default(0)
-  resolvedCases Int     @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String      @id @default(uuid())
+  name               String
+  phoneNumber        String      @unique
+  email              String?     @unique
+  designation        String?
+  badgeId            String?     @unique
+  departmentId       String?
+  department         Department? @relation(fields: [departmentId], references: [id])
+  activeCases        Int         @default(0)
+  resolvedCases      Int         @default(0)
+  avgResolutionHours Float?      @default(0)
+  rating             Float?      @default(5.0)
+  isAvailable        Boolean     @default(true)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   @@index([departmentId, activeCases])
+  @@index([phoneNumber])
 }
 
 model Complaint {
-  id                   String   @id @default(uuid())
-  trackingNumber       String   @unique
-  title                String
-  description          String
-  category             String
-  subcategory          String?
-  divisionId           String
-  divisionName         String
-  districtId           String   @default("dist-kolhapur")
-  districtName         String   @default("Kolhapur District")
-  authorityId          String
-  authorityName        String
-  departmentId         String?
-  department           Department? @relation(fields: [departmentId], references: [id])
-  location             String
-  region               String   @default("North Zone")
-  latitude             Float?
-  longitude            Float?
-  imageUrl             String?
-  status               String   @default("SUBMITTED")
-  priority             String   @default("MEDIUM")
-  citizenId            String
-  citizen              User     @relation(fields: [citizenId], references: [id])
-  assignedOfficerId    String?
-  assignedOfficerName  String?
-  slaHours             Int      @default(24)
-  slaDeadline          DateTime
-  aiConfidence         Float?
-  aiSuggestedCategory  String?
-  aiReasoning          String?
-  aiLanguage           String?
-  issueClusterId       String?
-  duplicateOfId        String?
-  duplicateOf          Complaint? @relation("ComplaintDuplicates", fields: [duplicateOfId], references: [id])
-  duplicates           Complaint[] @relation("ComplaintDuplicates")
-  resolutionRemarks    String?
-  resolutionImageUrl   String?
-  resolvedAt           DateTime?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-  timeline             ComplaintTimeline[]
+  id                  String              @id @default(uuid())
+  trackingNumber      String              @unique
+  title               String
+  description         String
+  category            String
+  subcategory         String?
+  divisionId          String
+  divisionName        String
+  districtId          String              @default("dist-kolhapur")
+  districtName        String              @default("Kolhapur District")
+  authorityId         String
+  authorityName       String
+  departmentId        String?
+  department          Department?         @relation(fields: [departmentId], references: [id])
+  location            String
+  landmark            String?
+  pincode             String?
+  region              String              @default("North Zone")
+  latitude            Float?
+  longitude           Float?
+  imageUrl            String?
+  status              String              @default("SUBMITTED") // SUBMITTED | ASSIGNED | IN_PROGRESS | RESOLVED | REJECTED | ESCALATED
+  priority            String              @default("MEDIUM")    // LOW | MEDIUM | HIGH | URGENT
+  citizenId           String
+  citizen             User                @relation(fields: [citizenId], references: [id])
+  assignedOfficerId   String?
+  assignedOfficerName String?
+  slaHours            Int                 @default(24)
+  slaDeadline         DateTime
+  isOverdue           Boolean             @default(false)
+  aiConfidence        Float?
+  aiSuggestedCategory String?
+  aiReasoning         String?
+  aiLanguage          String?
+  aiUrgencyScore      Float?
+  issueClusterId      String?
+  duplicateOfId       String?
+  duplicateOf         Complaint?          @relation("ComplaintDuplicates", fields: [duplicateOfId], references: [id])
+  duplicates          Complaint[]         @relation("ComplaintDuplicates")
+  resolutionRemarks   String?
+  resolutionImageUrl  String?
+  resolvedAt          DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  timeline            ComplaintTimeline[]
+  attachments         ComplaintAttachment[]
+  feedback            CitizenFeedback?
 
   @@index([citizenId, createdAt])
   @@index([issueClusterId])
   @@index([latitude, longitude])
   @@index([status, priority])
+  @@index([trackingNumber])
+  @@index([departmentId])
 }
 
 model ComplaintTimeline {
-  id          String     @id @default(uuid())
+  id          String    @id @default(uuid())
   complaintId String
-  complaint   Complaint  @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
   status      String
   note        String
   author      String
-  authorRole  String     @default("SYSTEM")
-  createdAt   DateTime   @default(now())
+  authorRole  String    @default("SYSTEM") // CITIZEN | OFFICER | ADMIN | SYSTEM
+  actionType  String?   @default("STATUS_UPDATE")
+  createdAt   DateTime  @default(now())
 
   @@index([complaintId, createdAt])
+}
+
+model ComplaintAttachment {
+  id          String    @id @default(uuid())
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  fileUrl     String
+  fileName    String?
+  fileType    String?   // image/jpeg, image/png, application/pdf
+  fileSize    Int?      // bytes
+  uploadedBy  String?
+  createdAt   DateTime  @default(now())
+
+  @@index([complaintId])
+}
+
+model CitizenFeedback {
+  id          String    @id @default(uuid())
+  complaintId String    @unique
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  rating      Int       @default(5) // 1 to 5 stars
+  comments    String?
+  isSatisfied Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  @@index([rating])
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phoneNumber String?
+  title       String
+  message     String
+  type        String   @default("STATUS_CHANGE") // STATUS_CHANGE | OFFICER_ASSIGNED | SLA_WARNING | RESOLUTION
+  isRead      Boolean  @default(false)
+  link        String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([phoneNumber])
 }
 
 model OtpVerification {

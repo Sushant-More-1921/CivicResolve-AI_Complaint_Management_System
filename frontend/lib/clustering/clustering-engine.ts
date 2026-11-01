@@ -14,7 +14,7 @@
  * - Do NOT create an extra active case for the field officer.
  */
 
-import { MasterIncident, CitizenReport, ClusterEvaluationResult } from "@/types/incident";
+import { MasterIncident, ClusterEvaluationResult } from "@/types/incident";
 import { ComplaintPriority } from "@/types/complaint";
 
 /**

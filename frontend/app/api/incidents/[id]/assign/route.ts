@@ -35,9 +35,10 @@ export async function POST(
       incident: updated,
       message: `Incident ${updated.incidentNumber} assigned to ${body.officerName}.`,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to assign officer";
     return NextResponse.json(
-      { success: false, message: error.message || "Failed to assign officer" },
+      { success: false, message },
       { status: 500 }
     );
   }

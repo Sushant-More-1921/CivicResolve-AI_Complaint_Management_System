@@ -1,4 +1,4 @@
-import { Complaint, ComplaintPriority, ComplaintStatus, RoutingAuditStep } from "@/types/complaint";
+import { Complaint, ComplaintPriority, ComplaintStatus } from "@/types/complaint";
 
 export const MOCK_COMPLAINTS: Complaint[] = [
   // Kolhapur Division Complaints (KMC)
@@ -656,4 +656,256 @@ export async function submitOfficerResolution(
     return true;
   }
   return false;
+}
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
+interface RawBackendComplaint {
+  id: string;
+  trackingNumber: string;
+  title: string;
+  description: string;
+  category: string;
+  subcategory?: string | null;
+  divisionId?: string | null;
+  divisionName?: string | null;
+  districtId?: string | null;
+  districtName?: string | null;
+  authorityId?: string | null;
+  authorityName?: string | null;
+  departmentId?: string | null;
+  department?: { name: string } | null;
+  departmentName?: string | null;
+  location: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  status: string;
+  priority: string;
+  assignedOfficerName?: string | null;
+  assignedOfficer?: { name: string } | null;
+  assignedOfficerId?: string | null;
+  citizen?: { name?: string | null; phoneNumber?: string | null } | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  imageUrl?: string | null;
+  timeline?: Array<{
+    status: string;
+    createdAt?: string | null;
+    note?: string;
+    author?: string;
+  }> | null;
+  resolvedAt?: string | null;
+  resolutionImageUrl?: string | null;
+  resolutionRemarks?: string | null;
+}
+
+export function backendComplaintToFrontend(raw: RawBackendComplaint): Complaint {
+  return {
+    id: raw.id,
+    trackingNumber: raw.trackingNumber,
+    title: raw.title,
+    description: raw.description,
+    category: raw.category,
+    subcategory: raw.subcategory || undefined,
+    divisionId: raw.divisionId || "div-kolhapur",
+    divisionName: raw.divisionName || "Kolhapur Division",
+    districtId: raw.districtId || "dist-kolhapur",
+    districtName: raw.districtName || "Kolhapur District",
+    authorityId: raw.authorityId || "auth-kmc",
+    authorityName: raw.authorityName || "Kolhapur Municipal Corporation (KMC)",
+    departmentId: raw.departmentId || "dept-waste",
+    department: raw.department?.name || raw.departmentName || "Municipal Public Works",
+    location: raw.location,
+    region: "Central Zone",
+    coordinates: {
+      lat: raw.latitude || 16.712,
+      lng: raw.longitude || 74.238,
+    },
+    status: raw.status as ComplaintStatus,
+    priority: raw.priority as ComplaintPriority,
+    assignedOfficer: raw.assignedOfficerName || raw.assignedOfficer?.name,
+    assignedOfficerId: raw.assignedOfficerId || undefined,
+    citizenMobile: raw.citizen?.phoneNumber || "+91 98765 43210",
+    citizenName: raw.citizen?.name || "Verified Citizen",
+    date: raw.createdAt ? new Date(raw.createdAt).toISOString().split("T")[0] : "2026-10-11",
+    createdAt: raw.createdAt ? new Date(raw.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Just now",
+    updatedAt: raw.updatedAt ? new Date(raw.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Just now",
+    imageUrl: raw.imageUrl || undefined,
+    timeline: (raw.timeline || []).map((t) => ({
+      status: t.status as ComplaintStatus,
+      timestamp: t.createdAt ? new Date(t.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Just now",
+      note: t.note || "Status updated",
+      author: t.author || "Grievance Authority",
+    })),
+    routingAuditTrail: [],
+    resolutionEvidence: raw.resolvedAt ? {
+      imageUrl: raw.resolutionImageUrl || "",
+      remarks: raw.resolutionRemarks || "Resolved",
+      uploadedAt: raw.resolvedAt ? new Date(raw.resolvedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "Recently",
+      uploadedBy: raw.assignedOfficerName || "Field Team",
+      inspectionPassed: true,
+    } : undefined,
+  };
+}
+
+export async function createBackendComplaintApi(data: {
+  title?: string;
+  description: string;
+  category: string;
+  subcategory?: string;
+  divisionId?: string;
+  divisionName?: string;
+  authorityId?: string;
+  authorityName?: string;
+  departmentId?: string;
+  location: string;
+  latitude?: number;
+  longitude?: number;
+  imageUrl?: string;
+  priority?: string;
+}, token: string): Promise<Complaint> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/complaints`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.message || "Failed to submit complaint.");
+  }
+
+  return backendComplaintToFrontend(json.data);
+}
+
+export async function getMyComplaintsApi(token: string): Promise<Complaint[]> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/complaints/my`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.message || "Failed to fetch complaints.");
+  }
+
+  return (json.data || []).map(backendComplaintToFrontend);
+}
+
+export async function trackComplaintApi(trackingNumber: string): Promise<Complaint> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/complaints/track/${encodeURIComponent(trackingNumber)}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.message || `Complaint "${trackingNumber}" not found.`);
+  }
+
+  return backendComplaintToFrontend(json.data);
+}
+
+export interface ComplaintFilterQuery {
+  status?: string;
+  priority?: string;
+  category?: string;
+  search?: string;
+}
+
+export async function getAllComplaintsAdminApi(filters: ComplaintFilterQuery | undefined, token: string): Promise<Complaint[]> {
+  const query = new URLSearchParams();
+  if (filters?.status && filters.status !== "ALL") query.set("status", filters.status);
+  if (filters?.priority && filters.priority !== "ALL") query.set("priority", filters.priority);
+  if (filters?.category && filters.category !== "ALL") query.set("category", filters.category);
+  if (filters?.search) query.set("search", filters.search);
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/complaints?${query.toString()}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.message || "Failed to fetch admin complaints.");
+  }
+
+  return (json.data || []).map(backendComplaintToFrontend);
+}
+
+export async function updateComplaintStatusApi(
+  complaintId: string,
+  newStatus: string,
+  options: { rejectionReason?: string; resolutionRemarks?: string; resolutionImageUrl?: string },
+  token: string
+): Promise<Complaint> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/complaints/${complaintId}/status`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      status: newStatus,
+      rejectionReason: options.rejectionReason,
+      resolutionRemarks: options.resolutionRemarks,
+      resolutionImageUrl: options.resolutionImageUrl,
+    }),
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.message || "Failed to update complaint status.");
+  }
+
+  return backendComplaintToFrontend(json.data);
+}
+
+export async function assignComplaintOfficerApi(
+  complaintId: string,
+  officerId: string,
+  officerName: string,
+  token: string
+): Promise<Complaint> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/complaints/${complaintId}/assign`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ officerId, officerName }),
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.message || "Failed to assign officer.");
+  }
+
+  return backendComplaintToFrontend(json.data);
+}
+
+export async function getAdminStatsApi(token: string) {
+  const res = await fetch(`${API_BASE_URL}/api/v1/complaints/admin/stats`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.message || "Failed to fetch admin stats.");
+  }
+
+  return json.data;
 }

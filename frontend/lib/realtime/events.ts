@@ -16,6 +16,7 @@ export type RealTimeEventType =
   | "OFFICER_ASSIGNED"
   | "STATUS_CHANGED"
   | "CASE_RESOLVED"
+  | "FEEDBACK_SUBMITTED"
   | "DATABASE_RESET";
 
 export interface RealTimePayload {
@@ -25,7 +26,7 @@ export interface RealTimePayload {
   incidentNumber?: string;
   complaintCount?: number;
   message?: string;
-  data?: any;
+  data?: unknown;
 }
 
 const CHANNEL_NAME = "civicresolve_realtime_channel";
@@ -44,7 +45,7 @@ if (typeof window !== "undefined" && "BroadcastChannel" in window) {
 /**
  * Broadcasts an update across all open tabs and components in real-time
  */
-export function emitRealTimeEvent(type: RealTimeEventType, data?: Record<string, any>): void {
+export function emitRealTimeEvent(type: RealTimeEventType, data?: Record<string, unknown>): void {
   const payload: RealTimePayload = {
     type,
     timestamp: Date.now(),

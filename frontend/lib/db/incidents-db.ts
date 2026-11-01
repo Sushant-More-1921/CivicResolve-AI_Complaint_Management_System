@@ -17,13 +17,13 @@ import {
   MapClusterItem,
   MapHotspotItem,
 } from "@/types/incident";
-import { Complaint, ComplaintPriority, ComplaintStatus } from "@/types/complaint";
+import { Complaint, ComplaintPriority, ComplaintStatus, CitizenFeedback } from "@/types/complaint";
 import {
   evaluateReportMatch,
   recalculateIncidentPriority,
   calculateHaversineDistance,
 } from "@/lib/clustering/clustering-engine";
-import { INITIAL_DIVISIONS, INITIAL_AUTHORITIES, INITIAL_DEPARTMENTS } from "@/lib/api/hierarchy";
+import { emitRealTimeEvent } from "@/lib/realtime/events";
 
 const STORAGE_KEY = "civicresolve_incidents_db_v1";
 
@@ -1130,7 +1130,122 @@ export function incidentToComplaint(inc: MasterIncident): Complaint {
     timeline: inc.timeline,
     routingAuditTrail: inc.routingAuditTrail,
     resolutionEvidence: inc.resolutionEvidence,
+    feedback: inc.feedback,
   };
+}
+
+/**
+ * Returns citizen-specific complaints or all complaints adapted for Citizen Dashboard
+ */
+export function getCitizenComplaints(citizenMobile?: string): Complaint[] {
+  const allIncidents = getStoredIncidents();
+  const cleanMobile = citizenMobile ? citizenMobile.replace(/\D/g, "") : "";
+
+  if (!cleanMobile) {
+    return allIncidents.map(incidentToComplaint);
+  }
+
+  // Find incidents matching this citizen's mobile
+  const userIncidents = allIncidents.filter((inc) => {
+    return inc.supportingReports.some((rep) => {
+      const repClean = rep.citizenMobile.replace(/\D/g, "");
+      return repClean.length >= 10 && cleanMobile.length >= 10 && (repClean.includes(cleanMobile) || cleanMobile.includes(repClean));
+    });
+  });
+
+  // If new user has no complaints yet, provide top representative incidents so they can preview the live system
+  if (userIncidents.length === 0) {
+    return allIncidents.slice(0, 4).map(incidentToComplaint);
+  }
+
+  return userIncidents.map(incidentToComplaint);
+}
+
+/**
+ * Finds a Master Incident or Citizen Report by Tracking Number (e.g. CMP-1042 or INC-2026-1042)
+ */
+export function getIncidentOrComplaintByTracking(trackingNumber: string): {
+  incident: MasterIncident;
+  report?: CitizenReport;
+  complaint: Complaint;
+} | null {
+  if (!trackingNumber) return null;
+  const q = trackingNumber.trim().toUpperCase();
+  const all = getStoredIncidents();
+
+  for (const inc of all) {
+    if (inc.incidentNumber.toUpperCase() === q || inc.id.toUpperCase() === q) {
+      return { incident: inc, complaint: incidentToComplaint(inc) };
+    }
+    const matchedRep = inc.supportingReports.find(
+      (r) => r.trackingNumber.toUpperCase() === q || r.id.toUpperCase() === q
+    );
+    if (matchedRep) {
+      return { incident: inc, report: matchedRep, complaint: incidentToComplaint(inc) };
+    }
+  }
+
+  // Substring search
+  for (const inc of all) {
+    if (inc.incidentNumber.toUpperCase().includes(q)) {
+      return { incident: inc, complaint: incidentToComplaint(inc) };
+    }
+    const rep = inc.supportingReports.find((r) => r.trackingNumber.toUpperCase().includes(q));
+    if (rep) {
+      return { incident: inc, report: rep, complaint: incidentToComplaint(inc) };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Saves citizen feedback and rating for a complaint
+ */
+export function saveCitizenFeedback(
+  trackingNumber: string,
+  feedback: CitizenFeedback
+): boolean {
+  if (!trackingNumber) return false;
+  const q = trackingNumber.trim().toUpperCase();
+  const all = getStoredIncidents();
+
+  const target = all.find(
+    (inc) =>
+      inc.incidentNumber.toUpperCase() === q ||
+      inc.id.toUpperCase() === q ||
+      inc.supportingReports.some((r) => r.trackingNumber.toUpperCase() === q)
+  );
+
+  if (!target) return false;
+
+  target.feedback = feedback;
+
+  target.timeline.push({
+    status: target.status,
+    timestamp: "Just now",
+    note: `Citizen Feedback Submitted: ${feedback.rating}/5 Stars (${feedback.satisfactionLevel}). Remarks: "${feedback.comments}"`,
+    author: "Citizen",
+  });
+
+  if (feedback.reopenRequested) {
+    target.status = "REOPENED";
+    target.timeline.push({
+      status: "REOPENED",
+      timestamp: "Just now",
+      note: "Grievance reopened by citizen due to unsatisfactory field remediation.",
+      author: "Citizen (Reopening Request)",
+    });
+  }
+
+  saveIncidents(all);
+  emitRealTimeEvent("FEEDBACK_SUBMITTED", {
+    incidentId: target.id,
+    trackingNumber: target.incidentNumber,
+    rating: feedback.rating,
+  });
+
+  return true;
 }
 
 /**

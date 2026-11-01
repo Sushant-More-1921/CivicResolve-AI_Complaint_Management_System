@@ -18,19 +18,16 @@ import {
   Building2,
   FolderTree,
   Plus,
-  Shield,
   Layers,
-  MapPin,
   Users,
   ChevronRight,
-  CheckCircle2,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function HierarchyManagementView() {
   const [divisions, setDivisions] = useState<DivisionInfo[]>(INITIAL_DIVISIONS);
-  const [districts, setDistricts] = useState<DistrictInfo[]>(INITIAL_DISTRICTS);
+  const [districts] = useState<DistrictInfo[]>(INITIAL_DISTRICTS);
   const [authorities, setAuthorities] = useState<LocalAuthorityInfo[]>(INITIAL_AUTHORITIES);
   const [departments, setDepartments] = useState<DepartmentInfo[]>(INITIAL_DEPARTMENTS);
 
@@ -107,7 +104,6 @@ export function HierarchyManagementView() {
   };
 
   const activeDiv = divisions.find((d) => d.id === selectedDivisionId) || divisions[0];
-  const activeDivDistricts = districts.filter((d) => d.divisionId === selectedDivisionId);
   const activeDivAuthorities = authorities.filter((a) => a.divisionId === selectedDivisionId);
   const activeAuthDepts = departments.filter((d) => d.authorityId === selectedAuthorityId);
 
@@ -355,7 +351,7 @@ export function HierarchyManagementView() {
                 <label className="block font-semibold mb-1 text-[#0F172A]">Authority Type</label>
                 <select
                   value={newAuthType}
-                  onChange={(e) => setNewAuthType(e.target.value as any)}
+                  onChange={(e) => setNewAuthType(e.target.value as LocalAuthorityInfo["type"])}
                   className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] text-sm"
                 >
                   <option value="MUNICIPAL_CORPORATION">Municipal Corporation (Maha Nagar Palika)</option>

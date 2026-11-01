@@ -8,6 +8,7 @@ export type ComplaintPriority = "VERY_HIGH" | "HIGH" | "MEDIUM" | "LOW";
 
 export type ComplaintStatus =
   | "SUBMITTED"
+  | "UNDER_REVIEW"
   | "VALIDATING"
   | "UNDER_REVIEW"
   | "ASSIGNED"
@@ -43,6 +44,7 @@ export interface ResolutionEvidence {
 }
 
 export interface CitizenFeedback {
+  id?: string;
   complaintId: string;
   trackingNumber: string;
   citizenMobile: string;
@@ -52,7 +54,7 @@ export interface CitizenFeedback {
   responseTimeRating: number;
   comments: string;
   submittedAt: string;
-  reopenRequested: boolean;
+  reopenRequested?: boolean;
 }
 
 export interface Complaint {

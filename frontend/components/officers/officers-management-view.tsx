@@ -4,19 +4,7 @@ import React, { useState } from "react";
 import { Officer, OfficerStatus } from "@/types/officer";
 import { Complaint } from "@/types/complaint";
 import { Button } from "@/components/ui/button";
-import {
-  Users,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  Phone,
-  Mail,
-  ShieldCheck,
-  Search,
-  Filter,
-  UserCheck,
-  Award,
-} from "lucide-react";
+import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface OfficersManagementViewProps {
@@ -74,9 +62,6 @@ export function OfficersManagementView({
     }
   };
 
-  const pendingComplaints = complaints.filter(
-    (c) => c.status === "SUBMITTED" || c.status === "VALIDATING" || c.assignedOfficer === "Unassigned"
-  );
 
   return (
     <div className="space-y-6">

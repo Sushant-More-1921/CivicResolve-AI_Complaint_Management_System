@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { AlertCircle, CheckCircle2, Phone, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isValidIndianMobile } from "@/lib/validations/auth";
 

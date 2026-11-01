@@ -9,5 +9,6 @@ router.use(authMiddleware); // Protect all user routes
 
 router.get('/profile', userController.getProfile);
 router.patch('/profile', userController.updateProfile);
+router.delete('/account', userController.deleteAccount);
 
 export default router;

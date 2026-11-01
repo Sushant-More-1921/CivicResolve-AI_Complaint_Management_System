@@ -3,17 +3,7 @@
 import React, { useState } from "react";
 import { Complaint } from "@/types/complaint";
 import { Button } from "@/components/ui/button";
-import {
-  FileSpreadsheet,
-  FileText,
-  Printer,
-  Download,
-  Calendar,
-  Filter,
-  CheckCircle2,
-  Clock,
-  Shield,
-} from "lucide-react";
+import { FileSpreadsheet, Printer } from "lucide-react";
 
 interface ComplaintsReportsViewProps {
   complaints: Complaint[];

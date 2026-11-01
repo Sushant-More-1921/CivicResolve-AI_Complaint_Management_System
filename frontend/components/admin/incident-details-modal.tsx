@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { MasterIncident, CitizenReport } from "@/types/incident";
+import { MasterIncident } from "@/types/incident";
 import { Officer } from "@/types/officer";
 import { StatusBadge } from "@/components/common/status-badge";
 import { PriorityBadge } from "@/components/common/priority-badge";
@@ -9,30 +9,20 @@ import { Button } from "@/components/ui/button";
 import {
   X,
   MapPin,
-  Calendar,
-  Phone,
-  User,
-  Shield,
   Sparkles,
-  Clock,
-  CheckCircle2,
-  AlertTriangle,
-  ArrowRight,
   UserCheck,
-  Camera,
   Layers,
-  FileText,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+import { ComplaintStatus } from "@/types/complaint";
 
 interface IncidentDetailsModalProps {
   incident: MasterIncident | null;
   officers: Officer[];
   onClose: () => void;
   onReassignOfficer: (incidentId: string, officerId: string, officerName: string) => void;
-  onUpdateStatus: (incidentId: string, newStatus: any, evidenceRemarks?: string) => void;
+  onUpdateStatus: (incidentId: string, newStatus: ComplaintStatus, evidenceRemarks?: string) => void;
 }
 
 export function IncidentDetailsModal({

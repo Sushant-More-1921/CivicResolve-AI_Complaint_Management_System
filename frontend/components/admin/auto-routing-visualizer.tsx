@@ -2,20 +2,8 @@
 
 import React, { useState } from "react";
 import { simulateAutoRoute, AutoRoutingResult } from "@/lib/utils/auto-router";
-import { Button } from "@/components/ui/button";
-import {
-  Navigation,
-  Sparkles,
-  ArrowRight,
-  ShieldCheck,
-  CheckCircle2,
-  Building2,
-  Users,
-  AlertCircle,
-  MapPin,
-  Lock,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Navigation, Lock } from "lucide-react";
+
 
 export function AutoRoutingVisualizer() {
   const [addressInput, setAddressInput] = useState("Ward 12, Kolhapur North, Near New High School");

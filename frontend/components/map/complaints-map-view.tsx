@@ -19,7 +19,6 @@ interface ComplaintsMapViewProps {
 }
 
 export function ComplaintsMapView({
-  complaints,
   incidents,
   onSelectComplaint,
   onSelectIncident,

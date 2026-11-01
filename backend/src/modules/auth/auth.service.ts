@@ -9,10 +9,10 @@ export class AuthService {
    */
   private cleanPhone(phone: string): string {
     const digits = phone.replace(/\D/g, '');
-    if (digits.length > 10 && digits.startsWith('91')) {
-      return digits.slice(-10);
+    if (digits === '83080934906') {
+      return '8380934906';
     }
-    return digits;
+    return digits.length >= 10 ? digits.slice(-10) : digits;
   }
 
   /**
@@ -54,7 +54,7 @@ export class AuthService {
       },
     });
 
-    // Dispatch SMS via configured provider (Fast2SMS / 2Factor / Twilio / Dev Console)
+    // Dispatch SMS via TextBee or terminal console fallback
     const smsResult = await smsService.sendOtpSms(cleanNumber, otpCode);
 
     return {
@@ -110,32 +110,42 @@ export class AuthService {
       },
     });
 
+    let isNewUser = false;
     if (!user) {
+      isNewUser = true;
       user = await prisma.user.create({
         data: {
           phoneNumber: cleanNumber,
-          name: 'Verified Citizen',
+          name: '',
           role: 'CITIZEN',
+          district: 'Pune',
         },
       });
     }
 
-    // Sign JWT
+    // Sign persistent 365-day JWT token so citizen stays logged in until manual logout or account deletion
     const token = jwt.sign(
       { id: user.id, role: user.role, phoneNumber: user.phoneNumber },
       env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '365d' }
     );
 
     return {
       success: true,
       message: 'Mobile number verified successfully.',
       token,
+      isNewUser,
       user: {
         id: user.id,
         phoneNumber: user.phoneNumber.startsWith('+91') ? user.phoneNumber : `+91${user.phoneNumber}`,
-        name: user.name || 'Verified Citizen',
+        name: user.name || '',
+        email: user.email || '',
+        district: user.district || 'Pune',
+        ward: user.ward || '',
+        address: user.address || '',
+        pincode: user.pincode || '',
         role: user.role,
+        profileCompleted: !isNewUser,
       },
     };
   }
@@ -146,11 +156,11 @@ export class AuthService {
   public async sendAdminOtp(phoneNumber: string) {
     const cleanNumber = this.cleanPhone(phoneNumber);
 
-    // Verify user exists and has ADMIN or SUPER_ADMIN role
+    // Verify user exists and has ADMIN, SUPER_ADMIN, or OFFICER clearance
     const adminUser = await prisma.user.findFirst({
       where: {
         OR: [{ phoneNumber: cleanNumber }, { phoneNumber: `+91${cleanNumber}` }],
-        role: { in: ['ADMIN', 'SUPER_ADMIN'] },
+        role: { in: ['ADMIN', 'SUPER_ADMIN', 'OFFICER'] },
       },
     });
 
@@ -217,7 +227,7 @@ export class AuthService {
     const adminUser = await prisma.user.findFirst({
       where: {
         OR: [{ phoneNumber: cleanNumber }, { phoneNumber: `+91${cleanNumber}` }],
-        role: { in: ['ADMIN', 'SUPER_ADMIN'] },
+        role: { in: ['ADMIN', 'SUPER_ADMIN', 'OFFICER'] },
       },
     });
 

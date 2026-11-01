@@ -1,3 +1,6 @@
+import dns from 'node:dns';
+dns.setDefaultResultOrder('ipv4first');
+
 import express from 'express';
 import cors from 'cors';
 import { env } from './config/env';
@@ -23,4 +26,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT} in ${env.NODE_ENV} mode`);
 });
 
+// Last restart trigger: textbee env sync
 export default app;

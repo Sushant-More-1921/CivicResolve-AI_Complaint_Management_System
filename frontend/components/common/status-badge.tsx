@@ -28,6 +28,13 @@ export function StatusBadge({
       border: "border-[#BFDBFE]",
       dot: "bg-[#0B4EA2]",
     },
+    UNDER_REVIEW: {
+      label: "UNDER REVIEW",
+      bg: "bg-[#F3E8FF]",
+      text: "text-[#5B21B6]",
+      border: "border-[#DDD6FE]",
+      dot: "bg-[#5B21B6]",
+    },
     VALIDATING: {
       label: "VALIDATING",
       bg: "bg-[#F3E8FF]",
@@ -77,24 +84,17 @@ export function StatusBadge({
       border: "border-[#FDE68A]",
       dot: "bg-[#F59E0B]",
     },
-    ESCALATED: {
-      label: "ESCALATED",
+    REJECTED: {
+      label: "REJECTED",
       bg: "bg-[#FEF2F2]",
       text: "text-[#DC2626]",
       border: "border-[#FECACA]",
       dot: "bg-[#DC2626]",
     },
-    UNDER_REVIEW: {
-      label: "UNDER REVIEW",
-      bg: "bg-[#F3E8FF]",
-      text: "text-[#5B21B6]",
-      border: "border-[#DDD6FE]",
-      dot: "bg-[#5B21B6]",
-    },
-    REJECTED: {
-      label: "REJECTED",
+    ESCALATED: {
+      label: "ESCALATED",
       bg: "bg-[#FEF2F2]",
-      text: "text-[#B91C1C]",
+      text: "text-[#DC2626]",
       border: "border-[#FECACA]",
       dot: "bg-[#DC2626]",
     },

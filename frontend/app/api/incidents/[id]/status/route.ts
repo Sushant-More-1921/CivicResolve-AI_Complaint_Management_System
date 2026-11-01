@@ -36,9 +36,10 @@ export async function POST(
       incident: updated,
       message: `Status of Incident ${updated.incidentNumber} updated to ${body.status}.`,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update status";
     return NextResponse.json(
-      { success: false, message: error.message || "Failed to update status" },
+      { success: false, message },
       { status: 500 }
     );
   }
