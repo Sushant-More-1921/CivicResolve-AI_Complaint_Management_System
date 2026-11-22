@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { authMiddleware } from '../../middleware/auth.middleware';
+import { authMiddleware, optionalAuthMiddleware } from '../../middleware/auth.middleware';
 import { AIController } from './ai.controller';
 
 const router = Router();
@@ -20,11 +20,12 @@ const upload = multer({
   },
 });
 
-router.post('/chatbot/complaint', controller.complaintChat);
+router.post('/complaints/verify-description', optionalAuthMiddleware, controller.verifyComplaintDescription);
+router.post('/image/validate', optionalAuthMiddleware, controller.validateEvidenceImage);
 router.post('/image/analyze', authMiddleware, controller.analyzeImage);
 router.post(
   '/voice/transcribe',
-  authMiddleware,
+  optionalAuthMiddleware,
   upload.single('audio'),
   controller.transcribeAudio
 );

@@ -6,6 +6,8 @@ dist/
 
 # Dependencies
 node_modules/
+ai-service/venv/
+ai-service/datasets/
 
 # Environment files
 .env*.local

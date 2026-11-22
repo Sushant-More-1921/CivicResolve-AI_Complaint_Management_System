@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="100%" height="100%" fill="none">
+  <defs>
+    <linearGradient id="bannerBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="50%" stop-color="#1E293B" />
+      <stop offset="100%" stop-color="#0B132B" />
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#1D4ED8" />
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#60A5FA" />
+      <stop offset="50%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#34D399" />
+    </linearGradient>
+    <pattern id="dotPattern" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.2" fill="#334155" opacity="0.6" />
+    </pattern>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="360" rx="16" fill="url(#bannerBg)" />
+  <rect width="1200" height="360" rx="16" fill="url(#dotPattern)" />
+
+  <!-- Decorative glow circles -->
+  <circle cx="200" cy="180" r="180" fill="#2563EB" opacity="0.12" filter="blur(60px)" />
+  <circle cx="1000" cy="160" r="160" fill="#10B981" opacity="0.1" filter="blur(60px)" />
+
+  <!-- Shield Emblem -->
+  <g transform="translate(100, 100)">
+    <rect x="0" y="0" width="160" height="160" rx="32" fill="url(#shieldGrad)" />
+    <!-- Inner shield icon -->
+    <path d="M80 34L120 48V88C120 114 99 138 80 146C61 138 40 114 40 88V48L80 34Z" fill="#FFFFFF" opacity="0.95" />
+    <path d="M80 62L96 78H84V112H76V78H64L80 62Z" fill="#1D4ED8" />
+  </g>
+
+  <!-- Header Text -->
+  <g transform="translate(300, 115)">
+    <!-- Title -->
+    <text x="0" y="52" font-family="system-ui, -apple-system, 'Inter', sans-serif" font-size="54" font-weight="900" fill="url(#textGrad)" letter-spacing="-1.2">CivicResolve</text>
+    
+    <!-- Subtitle -->
+    <text x="0" y="90" font-family="system-ui, -apple-system, 'Inter', sans-serif" font-size="20" font-weight="500" fill="#E2E8F0">Next-Generation Smart Civic Grievance &amp; Redressal Platform</text>
+    
+    <!-- Tags -->
+    <text x="0" y="122" font-family="system-ui, -apple-system, 'Inter', sans-serif" font-size="14" font-weight="400" fill="#94A3B8">Real-Time Geospatial Tracking • Citizen Portal • Ward Intelligence • Multi-Tier Municipal Dispatch</text>
+
+    <!-- Pill badges -->
+    <g transform="translate(0, 150)">
+      <!-- Badge 1: Next.js -->
+      <rect x="0" y="0" width="105" height="30" rx="15" fill="#1E293B" stroke="#475569" stroke-width="1" />
+      <text x="52.5" y="19" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#38BDF8">Next.js 16</text>
+
+      <!-- Badge 2: React 19 -->
+      <rect x="115" y="0" width="100" height="30" rx="15" fill="#1E293B" stroke="#475569" stroke-width="1" />
+      <text x="165" y="19" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#60A5FA">React 19</text>
+
+      <!-- Badge 3: TypeScript -->
+      <rect x="225" y="0" width="115" height="30" rx="15" fill="#1E293B" stroke="#475569" stroke-width="1" />
+      <text x="282.5" y="19" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#38BDF8">TypeScript</text>
+
+      <!-- Badge 4: Node / Express -->
+      <rect x="350" y="0" width="125" height="30" rx="15" fill="#1E293B" stroke="#475569" stroke-width="1" />
+      <text x="412.5" y="19" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#34D399">Express &amp; Sockets</text>
+
+      <!-- Badge 5: PostgreSQL -->
+      <rect x="485" y="0" width="135" height="30" rx="15" fill="#1E293B" stroke="#475569" stroke-width="1" />
+      <text x="552.5" y="19" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#A78BFA">Prisma &amp; Postgres</text>
+
+      <!-- Badge 6: Mappls -->
+      <rect x="630" y="0" width="120" height="30" rx="15" fill="#1E293B" stroke="#475569" stroke-width="1" />
+      <text x="690" y="19" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#FBBF24">Mappls Maps</text>
+    </g>
+  </g>
+</svg>
+

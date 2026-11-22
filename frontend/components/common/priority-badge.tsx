@@ -1,7 +1,10 @@
+"use client";
+
 import React from "react";
 import { ComplaintPriority } from "@/types/complaint";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, AlertCircle, ArrowUp, ArrowDown } from "lucide-react";
+import { useLanguage } from "@/context/language-context";
 
 interface PriorityBadgeProps {
   priority: ComplaintPriority;
@@ -12,8 +15,8 @@ interface PriorityBadgeProps {
 
 /**
  * PriorityBadge - Centralized priority indicator
- * Strict color mappings per Section 14 of complaint-system-frontend-README.md
- * VERY_HIGH -> Red, HIGH -> Orange, MEDIUM -> Blue, LOW -> Green
+ * Strict color mappings with full Light and Dark mode contrast
+ * VERY_HIGH / CRITICAL -> Red, HIGH -> Orange, MEDIUM -> Blue, LOW -> Green
  */
 export function PriorityBadge({
   priority,
@@ -21,37 +24,46 @@ export function PriorityBadge({
   showIcon = true,
   size = "md",
 }: PriorityBadgeProps) {
+  const { t } = useLanguage();
+
   const configs: Record<
     ComplaintPriority,
     { label: string; bg: string; text: string; border: string; icon: React.ReactNode }
   > = {
+    CRITICAL: {
+      label: t("priorityCritical", "CRITICAL"),
+      bg: "bg-[#FEF2F2] dark:bg-[#7F1D1D]/30",
+      text: "text-[#DC2626] dark:text-[#F87171]",
+      border: "border-[#FECACA] dark:border-[#991B1B]",
+      icon: <AlertCircle className="w-3.5 h-3.5 shrink-0 text-[#DC2626] dark:text-[#F87171]" />,
+    },
     VERY_HIGH: {
-      label: "VERY HIGH",
-      bg: "bg-[#FEF2F2]",
-      text: "text-[#DC2626]",
-      border: "border-[#FECACA]",
-      icon: <AlertCircle className="w-3.5 h-3.5 shrink-0 text-[#DC2626]" />,
+      label: t("priorityCritical", "CRITICAL"),
+      bg: "bg-[#FEF2F2] dark:bg-[#7F1D1D]/30",
+      text: "text-[#DC2626] dark:text-[#F87171]",
+      border: "border-[#FECACA] dark:border-[#991B1B]",
+      icon: <AlertCircle className="w-3.5 h-3.5 shrink-0 text-[#DC2626] dark:text-[#F87171]" />,
     },
     HIGH: {
-      label: "HIGH",
-      bg: "bg-[#FFF7E6]",
-      text: "text-[#B45309]",
-      border: "border-[#FDE68A]",
-      icon: <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-[#F59E0B]" />,
+      label: t("priorityHigh", "HIGH"),
+      bg: "bg-[#FFF7E6] dark:bg-[#78350F]/30",
+      text: "text-[#B45309] dark:text-[#FBBF24]",
+      border: "border-[#FDE68A] dark:border-[#92400E]",
+      icon: <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-[#F59E0B] dark:text-[#FBBF24]" />,
     },
     MEDIUM: {
-      label: "MEDIUM",
-      bg: "bg-[#EAF2FF]",
-      text: "text-[#0B4EA2]",
-      border: "border-[#BFDBFE]",
-      icon: <ArrowUp className="w-3.5 h-3.5 shrink-0 text-[#0B4EA2]" />,
+      label: t("priorityMedium", "MEDIUM"),
+      bg: "bg-[#EAF2FF] dark:bg-[#1E3A8A]/30",
+      text: "text-[#0B4EA2] dark:text-[#60A5FA]",
+      border: "border-[#BFDBFE] dark:border-[#1E40AF]/50",
+      icon: <ArrowUp className="w-3.5 h-3.5 shrink-0 text-[#0B4EA2] dark:text-[#60A5FA]" />,
     },
     LOW: {
-      label: "LOW",
-      bg: "bg-[#ECFDF3]",
-      text: "text-[#15803D]",
-      border: "border-[#BBF7D0]",
-      icon: <ArrowDown className="w-3.5 h-3.5 shrink-0 text-[#16A34A]" />,
+      label: t("priorityLow", "LOW"),
+      bg: "bg-[#ECFDF3] dark:bg-[#064E3B]/30",
+      text: "text-[#15803D] dark:text-[#4ADE80]",
+      border: "border-[#BBF7D0] dark:border-[#065F46]",
+      icon: <ArrowDown className="w-3.5 h-3.5 shrink-0 text-[#16A34A] dark:text-[#4ADE80]" />,
     },
   };
 
@@ -65,7 +77,7 @@ export function PriorityBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md border tracking-wider uppercase select-none",
+        "inline-flex items-center rounded-md border tracking-wider uppercase select-none transition-colors",
         current.bg,
         current.text,
         current.border,

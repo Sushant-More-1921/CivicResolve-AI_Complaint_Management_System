@@ -13,14 +13,10 @@ import {
   MapPin,
   Share2,
   Check,
-  Sparkles,
-  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/common/status-badge";
-import { PriorityBadge } from "@/components/common/priority-badge";
 import {
-  askComplaintAssistantApi,
   trackComplaintApi,
   BackendComplaintStatus,
   TrackedComplaint,
@@ -28,6 +24,9 @@ import {
 import { MasterIncident, CitizenReport } from "@/types/incident";
 import { Complaint, ComplaintStatus } from "@/types/complaint";
 import ROUTES from "@/config/routes";
+import { LanguageSwitcher } from "@/components/common/language-switcher";
+import { GlobalHeader } from "@/components/common/global-header";
+import { useLanguage } from "@/context/language-context";
 
 const TRACKED_STATUS_MAP: Record<BackendComplaintStatus, ComplaintStatus> = {
   SUBMITTED: "SUBMITTED",
@@ -41,6 +40,7 @@ const TRACKED_STATUS_MAP: Record<BackendComplaintStatus, ComplaintStatus> = {
 
 function TrackComplaintContent() {
   const searchParams = useSearchParams();
+  const { t } = useLanguage();
   const initialId = searchParams.get("id") || "";
 
   const [searchId, setSearchId] = useState(initialId);
@@ -56,11 +56,6 @@ function TrackComplaintContent() {
   } | null>(null);
 
   const [hasSearched, setHasSearched] = useState(false);
-  const [assistantOpen, setAssistantOpen] = useState(false);
-  const [assistantQuestion, setAssistantQuestion] = useState("");
-  const [assistantAnswer, setAssistantAnswer] = useState<string | null>(null);
-  const [assistantError, setAssistantError] = useState<string | null>(null);
-  const [isAskingAssistant, setIsAskingAssistant] = useState(false);
 
   const mapTrackedComplaint = (c: TrackedComplaint) => {
     const status = TRACKED_STATUS_MAP[c.status];
@@ -149,7 +144,7 @@ function TrackComplaintContent() {
       imageUrl: c.imageUrl || undefined,
       aiConfidence: complaint.aiConfidence ?? 0,
       aiSuggestedCategory: c.aiSuggestedCategory || c.category,
-      aiReasoning: c.aiReasoning || "AI triage assessment",
+      aiReasoning: c.aiReasoning || "Triage assessment",
       timeline,
       routingAuditTrail: [],
       resolutionEvidence: c.resolutionRemarks
@@ -193,8 +188,6 @@ function TrackComplaintContent() {
         .then((c) => {
           if (!isMounted) return;
           setResult(mapTrackedComplaint(c));
-          setAssistantAnswer(null);
-          setAssistantError(null);
           setHasSearched(true);
           setIsLoading(false);
         })
@@ -222,31 +215,6 @@ function TrackComplaintContent() {
     e.preventDefault();
     if (searchId.trim()) {
       setActiveQuery(searchId.trim());
-      setAssistantOpen(false);
-      setAssistantAnswer(null);
-      setAssistantError(null);
-    }
-  };
-
-  const handleAskAssistant = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!result || !assistantQuestion.trim()) return;
-    setIsAskingAssistant(true);
-    setAssistantError(null);
-    setAssistantAnswer(null);
-    try {
-      const response = await askComplaintAssistantApi({
-        tracking_number: result.complaint.trackingNumber,
-        question: assistantQuestion.trim(),
-        language: "en",
-      });
-      setAssistantAnswer(response.answer);
-    } catch (error) {
-      setAssistantError(
-        error instanceof Error ? error.message : "The assistant could not answer right now."
-      );
-    } finally {
-      setIsAskingAssistant(false);
     }
   };
 
@@ -261,55 +229,42 @@ function TrackComplaintContent() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-between selection:bg-[#EAF2FF] selection:text-[#0B4EA2]">
       {/* Top Header */}
-      <header className="w-full bg-white border-b border-[#E2E8F0] py-3.5 px-4 sm:px-8 sticky top-0 z-30">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link href={ROUTES.HOME} className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#0B4EA2] flex items-center justify-center text-white shrink-0">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <span className="block text-sm sm:text-base font-bold text-[#0F172A] leading-tight">
-                CivicResolve
-              </span>
-              <span className="block text-[11px] text-[#64748B]">
-                Track Grievance Status
-              </span>
-            </div>
-          </Link>
-
-          <div className="flex items-center gap-2 sm:gap-3">
+      <GlobalHeader
+        subtitle={t("trackGrievanceSubtitle")}
+        actions={
+          <>
             <Link href={ROUTES.CITIZEN.NEW_COMPLAINT}>
               <Button size="sm" variant="primary" className="text-xs font-semibold">
-                Register Complaint
+                {t("registerComplaint")}
               </Button>
             </Link>
             <Link href={ROUTES.CITIZEN.DASHBOARD}>
               <Button size="sm" variant="outline" className="text-xs border-[#CBD5E1]">
-                My Complaints
+                {t("myComplaints")}
               </Button>
             </Link>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {/* Main Track Workspace */}
       <main className="max-w-4xl w-full mx-auto py-8 px-4 sm:px-6 flex-1">
         {/* Navigation Breadcrumb */}
         <div className="flex items-center gap-2 text-xs text-[#64748B] mb-6">
           <Link href={ROUTES.HOME} className="hover:text-[#0B4EA2] flex items-center gap-1 font-medium">
-            <ArrowLeft className="w-3.5 h-3.5" /> Back to Home
+            <ArrowLeft className="w-3.5 h-3.5" /> {t("backToHome")}
           </Link>
           <span>/</span>
-          <span className="text-[#0F172A] font-semibold">Track Complaint Status</span>
+          <span className="text-[#0F172A] font-semibold">{t("trackTitle")}</span>
         </div>
 
         {/* Search Box */}
         <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-xs p-6 mb-8">
           <h1 className="text-xl sm:text-2xl font-bold text-[#0F172A] mb-1">
-            Track Complaint Status
+            {t("trackTitle")}
           </h1>
           <p className="text-xs sm:text-sm text-[#64748B] mb-5">
-            Enter your official Complaint Number (e.g., CMP-2026-1042 or CMP-1042) to inspect real-time status, assigned officer, and updates.
+            {t("trackSubtitle")}
           </p>
 
           <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
@@ -317,14 +272,14 @@ function TrackComplaintContent() {
               <Search className="w-5 h-5 text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Enter Complaint Number (e.g., CMP-2026-1042)..."
+                placeholder={t("trackInputPlaceholder")}
                 value={searchId}
                 onChange={(e) => setSearchId(e.target.value)}
                 className="w-full h-11 pl-11 pr-4 rounded-lg border border-[#CBD5E1] text-sm text-[#0F172A] font-mono font-medium placeholder:font-sans placeholder:text-[#94A3B8] focus:outline-none focus:border-[#0B4EA2] focus:ring-2 focus:ring-[#EAF2FF]"
               />
             </div>
             <Button type="submit" variant="primary" size="lg" className="h-11" isLoading={isLoading}>
-              Check Status
+              {t("checkStatusBtn")}
             </Button>
           </form>
 
@@ -336,8 +291,8 @@ function TrackComplaintContent() {
 
           {/* Quick Demo Pre-fills */}
           <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-[#F1F5F9] text-xs">
-            <span className="text-[#64748B] font-medium">Sample Complaint Numbers:</span>
-            {["CMP-2026-1042", "CMP-2026-1041"].map((id) => (
+            <span className="text-[#64748B] font-medium">{t("sampleComplaintNumbers")}</span>
+            {["CMP-2026-HOT1A1", "CMP-2026-HOT2A1", "CMP-2026-C9E2C2D4"].map((id) => (
               <button
                 key={id}
                 type="button"
@@ -405,7 +360,7 @@ function TrackComplaintContent() {
                 <div>
                   <span className="text-[#64748B] block font-medium">Assigned Officer</span>
                   <span className="font-semibold text-[#0F172A] mt-0.5 block truncate">
-                    {result.incident.assignedOfficer ? `👤 ${result.incident.assignedOfficer}` : "Awaiting Ward Allocation"}
+                    {result.incident.assignedOfficer ? result.incident.assignedOfficer : "Awaiting Ward Allocation"}
                   </span>
                 </div>
                 <div>
@@ -480,50 +435,11 @@ function TrackComplaintContent() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-xs p-6">
-              <button
-                type="button"
-                onClick={() => setAssistantOpen((open) => !open)}
-                aria-expanded={assistantOpen}
-                className="flex items-center gap-2 text-sm font-bold text-[#0B4EA2]"
-              >
-                <Sparkles className="w-4 h-4" />
-                Ask AI about this complaint
-              </button>
-              {assistantOpen && (
-                <div className="mt-4 space-y-3">
-                  <form onSubmit={handleAskAssistant} className="flex gap-2">
-                    <input
-                      value={assistantQuestion}
-                      onChange={(event) => setAssistantQuestion(event.target.value)}
-                      maxLength={2000}
-                      required
-                      placeholder="Ask about the current status or next steps"
-                      className="min-w-0 flex-1 h-10 px-3 rounded-lg border border-[#CBD5E1] text-sm focus:outline-none focus:border-[#0B4EA2] focus:ring-2 focus:ring-[#EAF2FF]"
-                    />
-                    <Button type="submit" size="sm" isLoading={isAskingAssistant} aria-label="Ask AI">
-                      <Send className="w-4 h-4" />
-                    </Button>
-                  </form>
-                  {assistantAnswer && (
-                    <p className="p-3 rounded-lg bg-[#F3E8FF] text-sm text-[#5B21B6]" aria-live="polite">
-                      {assistantAnswer}
-                    </p>
-                  )}
-                  {assistantError && (
-                    <p className="p-3 rounded-lg bg-[#FEF2F2] text-sm text-[#B91C1C]" role="alert">
-                      {assistantError}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
             {/* Audit Timeline Card */}
             <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-xs p-6">
               <h3 className="text-sm font-bold uppercase tracking-wider text-[#0F172A] mb-5 flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[#0B4EA2]" />
-                <span>Transparent End-to-End Audit Timeline</span>
+                <span>Grievance Timeline</span>
               </h3>
 
               <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#E2E8F0]">

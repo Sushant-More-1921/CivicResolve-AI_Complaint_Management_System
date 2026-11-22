@@ -1,5 +1,14 @@
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
+import fs from 'fs';
+
+const rootEnv = path.resolve(__dirname, '../../../.env');
+const localEnv = path.resolve(__dirname, '../../.env');
+if (fs.existsSync(rootEnv)) {
+  dotenv.config({ path: rootEnv });
+} else {
+  dotenv.config({ path: localEnv });
+}
 
 import { env } from '../config/env';
 import { smsService } from '../modules/auth/sms.service';

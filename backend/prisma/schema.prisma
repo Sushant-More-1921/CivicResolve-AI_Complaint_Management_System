@@ -8,46 +8,65 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// Application account model.
+// Canonical roles: CITIZEN | OFFICER | DEPARTMENT_ADMIN | SUPER_ADMIN
+// Note: Field Workers are strictly non-login employee records (FieldWorker model) and NEVER have User rows or roles.
 model User {
-  id           String      @id @default(uuid())
-  phoneNumber  String      @unique
-  name         String?
-  email        String?     @unique
-  designation  String?
-  role         String      @default("CITIZEN") // CITIZEN | OFFICER | ADMIN | SUPER_ADMIN
-  avatarUrl    String?
-  district     String?     @default("Kolhapur")
-  ward         String?
-  address      String?
-  pincode      String?
-  isActive     Boolean     @default(true)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id                String         @id @default(uuid())
+  phoneNumber       String         @unique
+  name              String?
+  email             String?        @unique
+  passwordHash      String?
+  designation       String?
+  role              String         @default("CITIZEN")
+  avatarUrl         String?
+  district          String?        @default("Kolhapur")
+  ward              String?
+  address           String?
+  pincode           String?
+  isActive          Boolean        @default(true)
+  departmentId      String?
+  department        Department?    @relation("DepartmentUsers", fields: [departmentId], references: [id])
+  primaryDepartment Department?    @relation("PrimaryDepartmentAdmin")
+  officerProfile    Officer?
+  complaints        Complaint[]
+  assignedTasks     Task[]         @relation("OfficerTasks")
+  createdTasks      Task[]         @relation("TaskCreator")
+  uploadedEvidence  Evidence[]     @relation("EvidenceUploader")
+  verifiedEvidence  Evidence[]     @relation("EvidenceVerifier")
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+  websiteNotifications Boolean        @default(true)
+  smsNotifications     Boolean        @default(true)
+  notifyStatusChange   Boolean        @default(true)
+  notifyResolution     Boolean        @default(true)
+  notifyInfoRequest    Boolean        @default(true)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id])
-  complaints   Complaint[]
-  notifications Notification[]
-
-  @@index([phoneNumber])
-  @@index([role])
+  @@index([role, isActive])
+  @@index([departmentId, role, isActive])
 }
 
 model Department {
-  id              String      @id @default(uuid())
-  name            String      @unique
-  code            String?     @unique
+  id              String        @id @default(uuid())
+  name            String        @unique
+  code            String?       @unique
   description     String?
   contactEmail    String?
   contactPhone    String?
   headOfficerName String?
-  users           User[]
+  primaryAdminId  String?       @unique
+  primaryAdmin    User?         @relation("PrimaryDepartmentAdmin", fields: [primaryAdminId], references: [id])
+  status          String        @default("ACTIVE")
+  users           User[]        @relation("DepartmentUsers")
   officers        Officer[]
+  fieldWorkers    FieldWorker[]
   complaints      Complaint[]
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-
-  @@index([name])
+  tasks           Task[]
+  auditLogs       AuditLog[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
 
 model Officer {
@@ -59,6 +78,8 @@ model Officer {
   badgeId            String?     @unique
   departmentId       String?
   department         Department? @relation(fields: [departmentId], references: [id])
+  userId             String?     @unique
+  user               User?       @relation(fields: [userId], references: [id])
   activeCases        Int         @default(0)
   resolvedCases      Int         @default(0)
   avgResolutionHours Float?      @default(0)
@@ -67,66 +88,90 @@ model Officer {
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
-  @@index([departmentId, activeCases])
-  @@index([phoneNumber])
+  @@index([departmentId, isAvailable])
+}
+
+// Strictly employee record ONLY: NO login, NO password, NO role, NO token, NO userId.
+model FieldWorker {
+  id                 String       @id @default(uuid())
+  name               String
+  phone              String?
+  designation        String       @default("Field Technician")
+  skills             String?
+  departmentId       String
+  department         Department   @relation(fields: [departmentId], references: [id])
+  availabilityStatus String       @default("AVAILABLE") // AVAILABLE | ON_TASK | OFF_DUTY
+  status             String       @default("ACTIVE")    // ACTIVE | INACTIVE
+  createdById        String?
+  taskAssignments    TaskWorker[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([departmentId, status])
 }
 
 model Complaint {
-  id                  String              @id @default(uuid())
-  trackingNumber      String              @unique
-  title               String
-  description         String
-  category            String
-  subcategory         String?
-  divisionId          String
-  divisionName        String
-  districtId          String              @default("dist-kolhapur")
-  districtName        String              @default("Kolhapur District")
-  authorityId         String
-  authorityName       String
-  departmentId        String?
-  department          Department?         @relation(fields: [departmentId], references: [id])
-  location            String
-  landmark            String?
-  pincode             String?
-  region              String              @default("North Zone")
-  latitude            Float?
-  longitude           Float?
-  imageUrl            String?
-  status              String              @default("SUBMITTED") // SUBMITTED | ASSIGNED | IN_PROGRESS | RESOLVED | REJECTED | ESCALATED
-  priority            String              @default("MEDIUM")    // LOW | MEDIUM | HIGH | URGENT
-  citizenId           String
-  citizen             User                @relation(fields: [citizenId], references: [id])
-  assignedOfficerId   String?
-  assignedOfficerName String?
-  slaHours            Int                 @default(24)
-  slaDeadline         DateTime
-  isOverdue           Boolean             @default(false)
-  aiConfidence        Float?
-  aiSuggestedCategory String?
-  aiReasoning         String?
-  aiLanguage          String?
-  aiUrgencyScore      Float?
-  issueClusterId      String?
-  duplicateOfId       String?
-  duplicateOf         Complaint?          @relation("ComplaintDuplicates", fields: [duplicateOfId], references: [id])
-  duplicates          Complaint[]         @relation("ComplaintDuplicates")
-  resolutionRemarks   String?
-  resolutionImageUrl  String?
-  resolvedAt          DateTime?
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-
-  timeline            ComplaintTimeline[]
-  attachments         ComplaintAttachment[]
-  feedback            CitizenFeedback?
+  id                    String                @id @default(uuid())
+  trackingNumber        String                @unique
+  title                 String
+  description           String
+  category              String
+  subcategory           String?
+  divisionId            String
+  divisionName          String
+  districtId            String                @default("dist-kolhapur")
+  districtName          String                @default("Kolhapur District")
+  authorityId           String
+  authorityName         String
+  departmentId          String?
+  department            Department?           @relation(fields: [departmentId], references: [id])
+  location              String
+  landmark              String?
+  pincode               String?
+  region                String                @default("North Zone")
+  latitude              Float?
+  longitude             Float?
+  imageUrl              String?
+  status                String                @default("SUBMITTED")
+  priority              String                @default("MEDIUM")
+  citizenId             String
+  citizen               User                  @relation(fields: [citizenId], references: [id])
+  assignedOfficerId     String?
+  assignedOfficerName   String?
+  assignedOfficerUserId String?
+  slaHours              Int                   @default(24)
+  slaDeadline           DateTime
+  isOverdue             Boolean               @default(false)
+  aiConfidence          Float?
+  aiSuggestedCategory   String?
+  aiReasoning           String?
+  aiLanguage            String?
+  aiUrgencyScore        Float?
+  priorityModelVersion  String?
+  priorityPredictedAt   DateTime?
+  issueClusterId        String?
+  duplicateOfId         String?
+  rejectionReason       String?
+  resolutionRemarks     String?
+  resolutionImageUrl    String?
+  resolvedAt            DateTime?
+  timeline              ComplaintTimeline[]
+  attachments           ComplaintAttachment[]
+  feedback              CitizenFeedback?
+  tasks                 Task[]
+  evidence              Evidence[]
+  auditLogs             AuditLog[]
+  notifications         Notification[]
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
 
   @@index([citizenId, createdAt])
-  @@index([issueClusterId])
-  @@index([latitude, longitude])
-  @@index([status, priority])
-  @@index([trackingNumber])
-  @@index([departmentId])
+  @@index([status, createdAt])
+  @@index([departmentId, status])
+  @@index([assignedOfficerId, status])
+  @@index([assignedOfficerUserId, status])
+  @@index([priority])
+  @@index([createdAt])
 }
 
 model ComplaintTimeline {
@@ -136,7 +181,7 @@ model ComplaintTimeline {
   status      String
   note        String
   author      String
-  authorRole  String    @default("SYSTEM") // CITIZEN | OFFICER | ADMIN | SYSTEM
+  authorRole  String    @default("SYSTEM")
   actionType  String?   @default("STATUS_UPDATE")
   createdAt   DateTime  @default(now())
 
@@ -149,40 +194,123 @@ model ComplaintAttachment {
   complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
   fileUrl     String
   fileName    String?
-  fileType    String?   // image/jpeg, image/png, application/pdf
-  fileSize    Int?      // bytes
+  fileType    String?
+  fileSize    Int?
   uploadedBy  String?
   createdAt   DateTime  @default(now())
-
-  @@index([complaintId])
 }
 
 model CitizenFeedback {
   id          String    @id @default(uuid())
   complaintId String    @unique
   complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
-  rating      Int       @default(5) // 1 to 5 stars
+  rating      Int       @default(5)
   comments    String?
   isSatisfied Boolean   @default(true)
   createdAt   DateTime  @default(now())
+}
 
-  @@index([rating])
+model Task {
+  id           String       @id @default(uuid())
+  complaintId  String
+  complaint    Complaint    @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  departmentId String
+  department   Department   @relation(fields: [departmentId], references: [id])
+  officerId    String
+  officer      User         @relation("OfficerTasks", fields: [officerId], references: [id])
+  createdById  String?
+  createdBy    User?        @relation("TaskCreator", fields: [createdById], references: [id])
+  title        String
+  instructions String?
+  progressNote String?
+  status       String       @default("PENDING") // PENDING | ASSIGNED | IN_PROGRESS | COMPLETED | CANCELLED
+  dueDate      DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  workers      TaskWorker[]
+  evidence     Evidence[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([complaintId])
+  @@index([departmentId, officerId, status])
+}
+
+model TaskWorker {
+  id            String      @id @default(uuid())
+  taskId        String
+  task          Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fieldWorkerId String
+  fieldWorker   FieldWorker @relation(fields: [fieldWorkerId], references: [id], onDelete: Cascade)
+  assignedAt    DateTime    @default(now())
+
+  @@unique([taskId, fieldWorkerId])
+  @@index([fieldWorkerId])
+}
+
+model Evidence {
+  id                  String    @id @default(uuid())
+  complaintId         String
+  complaint           Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  taskId              String?
+  task                Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  uploadedByOfficerId String
+  uploadedByOfficer   User      @relation("EvidenceUploader", fields: [uploadedByOfficerId], references: [id])
+  stage               String    @default("AFTER") // BEFORE | IN_PROGRESS | AFTER
+  fileUrl             String
+  caption             String?
+  verified            Boolean   @default(false)
+  verifiedById        String?
+  verifiedBy          User?     @relation("EvidenceVerifier", fields: [verifiedById], references: [id])
+  verifiedAt          DateTime?
+  createdAt           DateTime  @default(now())
+
+  @@index([complaintId, stage])
+}
+
+model AuditLog {
+  id           String      @id @default(uuid())
+  actorId      String?
+  actor        User?       @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorName    String?
+  actorRole    String?
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  complaintId  String?
+  complaint    Complaint?  @relation(fields: [complaintId], references: [id], onDelete: SetNull)
+  action       String
+  targetType   String
+  targetId     String?
+  summary      String
+  metadata     Json?
+  createdAt    DateTime    @default(now())
+
+  @@index([departmentId, createdAt])
+  @@index([complaintId])
+  @@index([action, createdAt])
 }
 
 model Notification {
-  id          String   @id @default(uuid())
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  phoneNumber String?
-  title       String
-  message     String
-  type        String   @default("STATUS_CHANGE") // STATUS_CHANGE | OFFICER_ASSIGNED | SLA_WARNING | RESOLUTION
-  isRead      Boolean  @default(false)
-  link        String?
-  createdAt   DateTime @default(now())
+  id             String     @id @default(uuid())
+  userId         String?
+  user           User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  complaintId    String?
+  complaint      Complaint? @relation(fields: [complaintId], references: [id], onDelete: SetNull)
+  phoneNumber    String?
+  title          String
+  message        String
+  type           String     @default("STATUS_CHANGE")
+  channel        String     @default("IN_APP") // IN_APP | SMS | ALL
+  isRead         Boolean    @default(false)
+  readAt         DateTime?
+  deliveryStatus String     @default("DELIVERED") // PENDING | DELIVERED | FAILED
+  link           String?
+  createdAt      DateTime   @default(now())
 
   @@index([userId, isRead])
-  @@index([phoneNumber])
+  @@index([userId, createdAt])
+  @@index([complaintId])
+  @@index([createdAt])
 }
 
 model OtpVerification {
@@ -192,7 +320,4 @@ model OtpVerification {
   verified    Boolean  @default(false)
   expiresAt   DateTime
   createdAt   DateTime @default(now())
-
-  @@index([phoneNumber, createdAt])
-  @@index([phoneNumber, otpCode, verified, expiresAt])
 }

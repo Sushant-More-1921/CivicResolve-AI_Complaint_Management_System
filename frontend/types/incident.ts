@@ -5,6 +5,7 @@
  */
 
 import { ComplaintPriority, ComplaintStatus, RoutingAuditStep, TimelineEvent, ResolutionEvidence, CitizenFeedback } from "./complaint";
+import type { EvidenceRecord, FieldTaskRecord } from "@/lib/api/officer-portal";
 
 export interface CitizenReport {
   id: string;
@@ -71,11 +72,15 @@ export interface MasterIncident {
   aiConfidence: number;
   aiSuggestedCategory: string;
   aiReasoning: string;
+  priorityModelVersion?: string;
+  priorityPredictedAt?: string;
 
   timeline: TimelineEvent[];
   routingAuditTrail: RoutingAuditStep[];
   resolutionEvidence?: ResolutionEvidence;
   feedback?: CitizenFeedback;
+  tasks?: FieldTaskRecord[];
+  evidence?: EvidenceRecord[];
 }
 
 export interface DashboardStats {
@@ -87,10 +92,13 @@ export interface DashboardStats {
   pendingCases: number; // SUBMITTED + VALIDATING + ASSIGNED
   inProgressCases: number; // IN_PROGRESS
   resolvedCases: number; // RESOLVED + CLOSED
+  rejectedCases?: number; // REJECTED
   escalatedCases: number; // ESCALATED
   slaBreachedCases: number; // SLA deadline expired
   highPriorityCases: number; // VERY_HIGH or HIGH
   totalSupportingReports: number; // Duplicate citizen reports clustered (totalComplaints - activeIncidents)
+  avgResolutionHours?: number; // Average resolution hours
+  resolutionRate?: number; // Resolution percentage
 }
 
 export interface IncidentFilterParams {

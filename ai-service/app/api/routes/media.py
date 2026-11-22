@@ -5,13 +5,17 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile, WebSocket
+from pydantic import BaseModel, Field, ValidationError
 
 from app.api.routes.analyze import AnalyzeRequest, analyze_payload
+from app.services.gemini import GeminiError, gemini_analyze_image
+from app.services.image_validator import get_image_validator_service
 from app.services.language import SUPPORTED_LANGUAGES
-from app.services.ollama import OllamaError, ollama_chat
-from app.services.transcription import transcribe_audio
+from app.services.sarvam import transcribe_audio_sarvam, proxy_sarvam_ws
+
+# Backward compatibility alias
+transcribe_audio = transcribe_audio_sarvam
 
 
 router = APIRouter()
@@ -29,6 +33,15 @@ class ImageAnalysisRequest(BaseModel):
     content_type: Literal["image/jpeg", "image/png", "image/webp"] | None = None
     text: str | None = Field(default=None, max_length=20_000)
     language: Literal["en", "hi", "mr"] | None = None
+
+
+class ImageValidationRequest(BaseModel):
+    image_base64: str = Field(min_length=1, max_length=12_000_000)
+    content_type: str | None = None
+    category: str = Field(default="", max_length=120)
+    description: str = Field(default="", max_length=20_000)
+    language: Literal["en", "hi", "mr", "auto"] | None = "auto"
+    existing_hashes: list[str] = Field(default_factory=list, max_length=500)
 
 
 def _decode_image(encoded: str, content_type: str | None) -> tuple[bytes, str]:
@@ -73,46 +86,50 @@ async def transcribe_complaint(audio: UploadFile = File(...)):
         raise HTTPException(status_code=413, detail="Audio file must be smaller than 20 MB.")
     try:
         result = await asyncio.to_thread(transcribe_audio, content, filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    analysis = None
+    try:
         analysis = await asyncio.to_thread(
             analyze_payload,
             AnalyzeRequest(text=result["text"], language=result["language"]),
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except OllamaError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception:
+        # Transcription must succeed even if LLM analysis is unavailable
+        analysis = None
+
     return {**result, "analysis": analysis}
+
+
+@router.websocket("/voice/stream")
+async def voice_stream_websocket(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time speech-to-text streaming.
+    Bridges client audio directly to Sarvam AI Saaras v4 WebSocket.
+    """
+    await websocket.accept()
+    await proxy_sarvam_ws(websocket)
 
 
 @router.post("/image/analyze")
 def analyze_complaint_image(request: ImageAnalysisRequest):
     try:
-        image, _ = _decode_image(request.image_base64, request.content_type)
-        encoded_image = base64.b64encode(image).decode("ascii")
-        image_description = ollama_chat(
-            [
-                {
-                    "role": "system",
-                    "content": (
-                        "Describe only visible civic infrastructure or sanitation "
-                        "problems, such as potholes, damaged roads, overflowing "
-                        "garbage, blocked drains, or water leaks. Do not infer "
-                        "hidden causes, identities, addresses, or details that "
-                        "cannot be seen. If no civic problem is visible, say so."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        "Analyze this complaint photo. "
-                        + (f"Citizen's note: {request.text}" if request.text else "")
-                    ),
-                },
-            ],
-            model=os.getenv("OLLAMA_VISION_MODEL", "llava"),
-            images=[encoded_image],
+        image, detected_type = _decode_image(request.image_base64, request.content_type)
+        prompt = (
+            "Describe only visible civic infrastructure or sanitation problems, such as potholes, "
+            "damaged roads, overflowing garbage, blocked drains, or water leaks. Do not infer hidden "
+            "causes, identities, addresses, or details that cannot be seen. If no civic problem is visible, say so."
+        )
+        if request.text:
+            prompt += f"\nCitizen's note: {request.text.strip()}"
+
+        image_description = gemini_analyze_image(
+            image_bytes=image,
+            mime_type=detected_type,
+            prompt=prompt,
         )
         if request.text:
             analysis_text = f"{request.text.strip()}\nVisible evidence: {image_description}"
@@ -123,16 +140,85 @@ def analyze_complaint_image(request: ImageAnalysisRequest):
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except OllamaError as exc:
+    except GeminiError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"image_description": image_description, "analysis": analysis}
 
 
+@router.post("/validate-image")
+async def validate_evidence_image(request: Request):
+    """Validate uploaded civic complaint evidence image (supports JSON base64 or multipart/form-data)."""
+    ct = (request.headers.get("content-type") or "").lower()
+    raw_bytes: bytes | None = None
+    declared_type: str | None = None
+    category = ""
+    description = ""
+    language: str | None = "auto"
+    existing_hashes: list[str] = []
+
+    if "multipart/form-data" in ct:
+        form = await request.form()
+        upload = form.get("image") or form.get("file")
+        if upload is None or not hasattr(upload, "read"):
+            raise HTTPException(status_code=400, detail="Multipart field 'image' is required.")
+        raw_bytes = await upload.read(MAX_IMAGE_BYTES + 1)
+        await upload.close()
+        declared_type = getattr(upload, "content_type", None)
+        category = str(form.get("category") or "")
+        description = str(form.get("description") or "")
+        language = str(form.get("language") or "auto")
+        raw_hashes = form.get("existing_hashes")
+        if isinstance(raw_hashes, str) and raw_hashes.strip():
+            existing_hashes = [h.strip() for h in raw_hashes.split(",") if h.strip()]
+    else:
+        try:
+            body_json = await request.json()
+            payload = ImageValidationRequest.model_validate(body_json)
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload.") from exc
+
+        encoded = payload.image_base64.strip()
+        if encoded.startswith("data:"):
+            encoded = encoded.split(",", 1)[-1]
+        try:
+            raw_bytes = base64.b64decode(encoded, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise HTTPException(status_code=400, detail="image_base64 must be valid base64 data.") from exc
+        declared_type = payload.content_type
+        category = payload.category
+        description = payload.description
+        language = payload.language
+        existing_hashes = payload.existing_hashes
+
+    if len(raw_bytes) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Image file must be smaller than 8 MB.")
+
+    try:
+        validator = get_image_validator_service()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Image validation model unavailable: {exc}") from exc
+
+    return await asyncio.to_thread(
+        validator.validate_bytes,
+        raw_bytes,
+        category=category,
+        description=description,
+        language=language,
+        declared_content_type=declared_type,
+        existing_hashes=existing_hashes,
+    )
+
+
 @router.get("/voice/languages")
 def get_supported_voice_languages():
     return {
         "languages": sorted(SUPPORTED_LANGUAGES),
-        "transcription_model": os.getenv("WHISPER_MODEL_SIZE", "small"),
+        "transcription_model": os.getenv("SARVAM_MODEL", "saaras:v4"),
+        "provider": "sarvam_ai",
     }

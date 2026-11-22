@@ -1,4 +1,5 @@
 import { Complaint, ComplaintPriority, ComplaintStatus } from "@/types/complaint";
+import { clearSession } from "@/lib/auth/session";
 
 export const MOCK_COMPLAINTS: Complaint[] = [
   // Kolhapur Division Complaints (KMC)
@@ -658,7 +659,27 @@ export async function submitOfficerResolution(
   return false;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const RAW_API_URL = (
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "");
+
+const API_ROOT = RAW_API_URL.endsWith("/api/v1")
+  ? RAW_API_URL
+  : `${RAW_API_URL}/api/v1`;
+
+async function parseJsonResponse<T = any>(res: Response): Promise<T> {
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {
+    if (!res.ok) {
+      throw new Error(`Server request failed with status ${res.status}. Please try again.`);
+    }
+    throw new Error("Server returned an invalid response format. Please try again.");
+  }
+  return json as T;
+}
 
 interface RawBackendComplaint {
   id: string;
@@ -684,10 +705,13 @@ interface RawBackendComplaint {
   assignedOfficerName?: string | null;
   assignedOfficer?: { name: string } | null;
   assignedOfficerId?: string | null;
+  assignedOfficerUserId?: string | null;
   citizen?: { name?: string | null; phoneNumber?: string | null } | null;
   createdAt?: string | null;
   updatedAt?: string | null;
   imageUrl?: string | null;
+  priorityModelVersion?: string | null;
+  priorityPredictedAt?: string | null;
   timeline?: Array<{
     status: string;
     createdAt?: string | null;
@@ -697,6 +721,8 @@ interface RawBackendComplaint {
   resolvedAt?: string | null;
   resolutionImageUrl?: string | null;
   resolutionRemarks?: string | null;
+  tasks?: any[] | null;
+  evidence?: any[] | null;
 }
 
 export function backendComplaintToFrontend(raw: RawBackendComplaint): Complaint {
@@ -725,12 +751,15 @@ export function backendComplaintToFrontend(raw: RawBackendComplaint): Complaint 
     priority: raw.priority as ComplaintPriority,
     assignedOfficer: raw.assignedOfficerName || raw.assignedOfficer?.name,
     assignedOfficerId: raw.assignedOfficerId || undefined,
+    assignedOfficerUserId: raw.assignedOfficerUserId || undefined,
     citizenMobile: raw.citizen?.phoneNumber || "+91 98765 43210",
     citizenName: raw.citizen?.name || "Verified Citizen",
     date: raw.createdAt ? new Date(raw.createdAt).toISOString().split("T")[0] : "2026-10-11",
     createdAt: raw.createdAt ? new Date(raw.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Just now",
     updatedAt: raw.updatedAt ? new Date(raw.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Just now",
     imageUrl: raw.imageUrl || undefined,
+    priorityModelVersion: raw.priorityModelVersion || undefined,
+    priorityPredictedAt: raw.priorityPredictedAt || undefined,
     timeline: (raw.timeline || []).map((t) => ({
       status: t.status as ComplaintStatus,
       timestamp: t.createdAt ? new Date(t.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Just now",
@@ -745,6 +774,8 @@ export function backendComplaintToFrontend(raw: RawBackendComplaint): Complaint 
       uploadedBy: raw.assignedOfficerName || "Field Team",
       inspectionPassed: true,
     } : undefined,
+    tasks: Array.isArray(raw.tasks) ? raw.tasks : [],
+    evidence: Array.isArray(raw.evidence) ? raw.evidence : [],
   };
 }
 
@@ -764,7 +795,7 @@ export async function createBackendComplaintApi(data: {
   imageUrl?: string;
   priority?: string;
 }, token: string): Promise<Complaint> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/complaints`, {
+  const res = await fetch(`${API_ROOT}/complaints`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -773,8 +804,12 @@ export async function createBackendComplaintApi(data: {
     body: JSON.stringify(data),
   });
 
-  const json = await res.json();
+  const json = await parseJsonResponse(res);
   if (!res.ok) {
+    if (res.status === 401) {
+      clearSession();
+      throw new Error("Your session has expired. Please sign in again.");
+    }
     throw new Error(json.message || "Failed to submit complaint.");
   }
 
@@ -782,7 +817,7 @@ export async function createBackendComplaintApi(data: {
 }
 
 export async function getMyComplaintsApi(token: string): Promise<Complaint[]> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/complaints/my`, {
+  const res = await fetch(`${API_ROOT}/complaints/my`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -790,8 +825,12 @@ export async function getMyComplaintsApi(token: string): Promise<Complaint[]> {
     },
   });
 
-  const json = await res.json();
+  const json = await parseJsonResponse(res);
   if (!res.ok) {
+    if (res.status === 401) {
+      clearSession();
+      throw new Error("Your session has expired. Please sign in again.");
+    }
     throw new Error(json.message || "Failed to fetch complaints.");
   }
 
@@ -799,12 +838,12 @@ export async function getMyComplaintsApi(token: string): Promise<Complaint[]> {
 }
 
 export async function trackComplaintApi(trackingNumber: string): Promise<Complaint> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/complaints/track/${encodeURIComponent(trackingNumber)}`, {
+  const res = await fetch(`${API_ROOT}/complaints/track/${encodeURIComponent(trackingNumber)}`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
   });
 
-  const json = await res.json();
+  const json = await parseJsonResponse(res);
   if (!res.ok) {
     throw new Error(json.message || `Complaint "${trackingNumber}" not found.`);
   }
@@ -820,26 +859,30 @@ export interface ComplaintFilterQuery {
 }
 
 export async function getAllComplaintsAdminApi(filters: ComplaintFilterQuery | undefined, token: string): Promise<Complaint[]> {
-  const query = new URLSearchParams();
-  if (filters?.status && filters.status !== "ALL") query.set("status", filters.status);
-  if (filters?.priority && filters.priority !== "ALL") query.set("priority", filters.priority);
-  if (filters?.category && filters.category !== "ALL") query.set("category", filters.category);
-  if (filters?.search) query.set("search", filters.search);
+  try {
+    const query = new URLSearchParams();
+    if (filters?.status && filters.status !== "ALL") query.set("status", filters.status);
+    if (filters?.priority && filters.priority !== "ALL") query.set("priority", filters.priority);
+    if (filters?.category && filters.category !== "ALL") query.set("category", filters.category);
+    if (filters?.search) query.set("search", filters.search);
 
-  const res = await fetch(`${API_BASE_URL}/api/v1/complaints?${query.toString()}`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-  });
+    const res = await fetch(`${API_ROOT}/complaints?${query.toString()}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.message || "Failed to fetch admin complaints.");
+    if (!res.ok) {
+      return [];
+    }
+
+    const json = await parseJsonResponse(res);
+    return (json.data || []).map(backendComplaintToFrontend);
+  } catch {
+    return [];
   }
-
-  return (json.data || []).map(backendComplaintToFrontend);
 }
 
 export async function updateComplaintStatusApi(
@@ -848,7 +891,7 @@ export async function updateComplaintStatusApi(
   options: { rejectionReason?: string; resolutionRemarks?: string; resolutionImageUrl?: string },
   token: string
 ): Promise<Complaint> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/complaints/${complaintId}/status`, {
+  const res = await fetch(`${API_ROOT}/complaints/${complaintId}/status`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -862,7 +905,7 @@ export async function updateComplaintStatusApi(
     }),
   });
 
-  const json = await res.json();
+  const json = await parseJsonResponse(res);
   if (!res.ok) {
     throw new Error(json.message || "Failed to update complaint status.");
   }
@@ -876,7 +919,7 @@ export async function assignComplaintOfficerApi(
   officerName: string,
   token: string
 ): Promise<Complaint> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/complaints/${complaintId}/assign`, {
+  const res = await fetch(`${API_ROOT}/complaints/${complaintId}/assign`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -885,7 +928,7 @@ export async function assignComplaintOfficerApi(
     body: JSON.stringify({ officerId, officerName }),
   });
 
-  const json = await res.json();
+  const json = await parseJsonResponse(res);
   if (!res.ok) {
     throw new Error(json.message || "Failed to assign officer.");
   }
@@ -893,8 +936,31 @@ export async function assignComplaintOfficerApi(
   return backendComplaintToFrontend(json.data);
 }
 
+export async function overrideComplaintPriorityApi(
+  complaintId: string,
+  priority: string,
+  reason: string,
+  token: string
+): Promise<Complaint> {
+  const res = await fetch(`${API_ROOT}/complaints/${complaintId}/priority`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ priority, reason }),
+  });
+
+  const json = await parseJsonResponse(res);
+  if (!res.ok) {
+    throw new Error(json.message || "Failed to override complaint priority.");
+  }
+
+  return backendComplaintToFrontend(json.data);
+}
+
 export async function getAdminStatsApi(token: string) {
-  const res = await fetch(`${API_BASE_URL}/api/v1/complaints/admin/stats`, {
+  const res = await fetch(`${API_ROOT}/complaints/admin/stats`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -902,10 +968,33 @@ export async function getAdminStatsApi(token: string) {
     },
   });
 
-  const json = await res.json();
+  const json = await parseJsonResponse(res);
   if (!res.ok) {
     throw new Error(json.message || "Failed to fetch admin stats.");
   }
 
   return json.data;
+}
+
+export async function reassignComplaintDepartmentApi(
+  complaintId: string,
+  departmentId: string,
+  reason: string,
+  token: string
+): Promise<Complaint> {
+  const res = await fetch(`${API_ROOT}/complaints/${complaintId}/reassign-department`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ departmentId, reason }),
+  });
+
+  const json = await parseJsonResponse(res);
+  if (!res.ok) {
+    throw new Error(json.message || "Failed to transfer complaint to another department.");
+  }
+
+  return backendComplaintToFrontend(json.data);
 }

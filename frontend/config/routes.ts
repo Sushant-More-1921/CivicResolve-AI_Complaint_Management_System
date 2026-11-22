@@ -12,9 +12,9 @@ export const ROUTES = {
 
   // Authentication
   AUTH: {
-    CITIZEN_LOGIN: "/auth/citizenlogin",
-    ADMIN_LOGIN: "/auth/adminlogin",
-    LOGIN: "/auth/citizenlogin",
+    CITIZEN_LOGIN: "/auth/login",
+    ADMIN_LOGIN: "/auth/login",
+    LOGIN: "/auth/login",
     REGISTER: "/register",
   },
 
@@ -35,7 +35,7 @@ export const ROUTES = {
   // Admin Portal & Tabs
   ADMIN: {
     ROOT: "/admin",
-    LOGIN: "/auth/adminlogin",
+    LOGIN: "/auth/login",
     DASHBOARD: "/admin/dashboard",
     TAB_DASHBOARD: "/admin/dashboard?tab=dashboard",
     TAB_COMPLAINTS: "/admin/dashboard?tab=complaints",

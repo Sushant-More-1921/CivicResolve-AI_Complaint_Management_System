@@ -1,8 +1,8 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "CivicResolve Backend API",
+  "main": "dist/app.js",
   "scripts": {
     "dev": "nodemon --exec tsx src/app.ts",
     "build": "tsc",
@@ -17,26 +17,30 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@prisma/client": "^5.22.0",
     "@supabase/supabase-js": "^2.118.0",
     "bcryptjs": "^3.0.3",
+    "compression": "^1.8.2",
     "cors": "^2.8.6",
     "dotenv": "^18.0.5",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.4.0",
+    "socket.io": "^4.8.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@prisma/client": "^5.22.0",
     "@types/bcryptjs": "^2.4.6",
+    "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.3.0",
     "@types/node": "^26.6.4",
+    "@types/socket.io": "^3.0.1",
     "nodemon": "^3.1.14",
     "prisma": "^5.22.0",
-    "ts-node": "^10.9.2",
+    "socket.io-client": "^4.8.4",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3"
   }

@@ -4,7 +4,7 @@
  * Reference: Sections 13, 14, 28 of complaint-system-frontend-README.md
  */
 
-export type ComplaintPriority = "VERY_HIGH" | "HIGH" | "MEDIUM" | "LOW";
+export type ComplaintPriority = "VERY_HIGH" | "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 
 export type ComplaintStatus =
   | "SUBMITTED"
@@ -95,9 +95,15 @@ export interface Complaint {
   aiConfidence?: number;
   aiSuggestedCategory?: string;
   aiReasoning?: string;
+  aiUrgencyScore?: number;
 
   timeline: TimelineEvent[];
   routingAuditTrail: RoutingAuditStep[];
   resolutionEvidence?: ResolutionEvidence;
+  priorityModelVersion?: string;
+  priorityPredictedAt?: string;
+  assignedOfficerUserId?: string;
   feedback?: CitizenFeedback;
+  tasks?: any[];
+  evidence?: any[];
 }

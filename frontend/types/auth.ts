@@ -3,7 +3,12 @@
  * Centralized types for OTP authentication flow.
  */
 
-export type UserRole = "CITIZEN" | "OFFICER" | "ADMIN" | "SUPER_ADMIN";
+export type UserRole =
+  | "CITIZEN"
+  | "OFFICER"
+  | "DEPARTMENT_ADMIN"
+  | "ADMIN"
+  | "SUPER_ADMIN";
 
 export interface AuthUser {
   id: string;
@@ -18,8 +23,16 @@ export interface AuthUser {
   isVerified: boolean;
   profileCompleted?: boolean;
   department?: string;
+  departmentId?: string | null;
+  departmentName?: string | null;
+  officerId?: string | null;
   badgeId?: string;
   designation?: string;
+  websiteNotifications?: boolean;
+  smsNotifications?: boolean;
+  notifyStatusChange?: boolean;
+  notifyResolution?: boolean;
+  notifyInfoRequest?: boolean;
   createdAt?: string;
 }
 
@@ -50,6 +63,7 @@ export interface VerifyOtpResponse {
   message: string;
   token: string;
   isNewUser?: boolean;
+  redirectTo?: string;
   user: AuthUser;
 }
 

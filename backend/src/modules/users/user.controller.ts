@@ -11,6 +11,11 @@ const updateProfileSchema = z.object({
   address: z.string().optional(),
   pincode: z.string().regex(/^\d{6}$/, 'Pincode must be exactly 6 digits').optional().or(z.literal('')),
   avatarUrl: z.string().optional().or(z.literal('')),
+  websiteNotifications: z.boolean().optional(),
+  smsNotifications: z.boolean().optional(),
+  notifyStatusChange: z.boolean().optional(),
+  notifyResolution: z.boolean().optional(),
+  notifyInfoRequest: z.boolean().optional(),
 });
 
 export class UserController {
@@ -32,12 +37,21 @@ export class UserController {
           email: true,
           phoneNumber: true,
           role: true,
+          designation: true,
           district: true,
           ward: true,
           address: true,
           pincode: true,
           avatarUrl: true,
           departmentId: true,
+          isActive: true,
+          websiteNotifications: true,
+          smsNotifications: true,
+          notifyStatusChange: true,
+          notifyResolution: true,
+          notifyInfoRequest: true,
+          department: { select: { id: true, name: true, code: true } },
+          officerProfile: { select: { id: true, badgeId: true, departmentId: true } },
           createdAt: true,
         },
       });
@@ -50,6 +64,7 @@ export class UserController {
         });
       }
 
+      const canonicalRole = user.role === 'ADMIN' ? 'DEPARTMENT_ADMIN' : user.role;
       const profileCompleted = !!(user.name && user.name !== 'Verified Citizen' && user.address);
 
       res.status(200).json({
@@ -57,6 +72,11 @@ export class UserController {
         message: 'Profile fetched successfully',
         data: {
           ...user,
+          role: canonicalRole,
+          departmentId: user.departmentId || user.officerProfile?.departmentId || null,
+          departmentName: user.department?.name || null,
+          officerId: user.officerProfile?.id || null,
+          badgeId: user.officerProfile?.badgeId || null,
           profileCompleted,
         },
       });
@@ -85,6 +105,11 @@ export class UserController {
       if (data.address !== undefined) updatePayload.address = data.address.trim();
       if (data.pincode !== undefined) updatePayload.pincode = data.pincode ? data.pincode.trim() : null;
       if (data.avatarUrl !== undefined) updatePayload.avatarUrl = data.avatarUrl || null;
+      if (data.websiteNotifications !== undefined) updatePayload.websiteNotifications = data.websiteNotifications;
+      if (data.smsNotifications !== undefined) updatePayload.smsNotifications = data.smsNotifications;
+      if (data.notifyStatusChange !== undefined) updatePayload.notifyStatusChange = data.notifyStatusChange;
+      if (data.notifyResolution !== undefined) updatePayload.notifyResolution = data.notifyResolution;
+      if (data.notifyInfoRequest !== undefined) updatePayload.notifyInfoRequest = data.notifyInfoRequest;
 
       const user = await prisma.user.update({
         where: { id: userId },
@@ -100,6 +125,11 @@ export class UserController {
           address: true,
           pincode: true,
           avatarUrl: true,
+          websiteNotifications: true,
+          smsNotifications: true,
+          notifyStatusChange: true,
+          notifyResolution: true,
+          notifyInfoRequest: true,
           updatedAt: true,
         },
       });
@@ -127,6 +157,12 @@ export class UserController {
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+      if (req.user?.role && req.user.role !== 'CITIZEN') {
+        return res.status(403).json({
+          success: false,
+          message: 'Administrative and officer accounts cannot be self-deleted via citizen portal.',
+        });
       }
 
       // 1. Delete associated notifications

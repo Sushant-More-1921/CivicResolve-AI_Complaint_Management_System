@@ -29,23 +29,23 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ) => {
     // Base styles: consistent 8px radius (rounded-lg), transitions, focus rings
     const baseStyles =
-      "inline-flex items-center justify-center font-medium rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-[0.99]";
+      "inline-flex items-center justify-center font-medium rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#0B0F17] disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-[0.99] cursor-pointer";
 
     const variantStyles: Record<string, string> = {
       primary:
-        "bg-[#0B4EA2] text-white hover:bg-[#083B7A] focus-visible:ring-[#0B4EA2] shadow-sm",
+        "bg-[#0B4EA2] dark:bg-[#2563EB] text-white hover:bg-[#083B7A] dark:hover:bg-[#1D4ED8] focus-visible:ring-[#0B4EA2] dark:focus-visible:ring-[#3B82F6] shadow-sm",
       secondary:
-        "bg-white text-[#0B4EA2] border border-[#CBD5E1] hover:bg-[#F8FAFC] hover:border-[#0B4EA2] focus-visible:ring-[#0B4EA2] shadow-sm",
+        "bg-white dark:bg-[#161F30] text-[#0B4EA2] dark:text-[#60A5FA] border border-[#CBD5E1] dark:border-[#2D3748] hover:bg-[#F8FAFC] dark:hover:bg-[#1E293B] hover:border-[#0B4EA2] dark:hover:border-[#3B82F6] focus-visible:ring-[#0B4EA2] shadow-sm",
       success:
-        "bg-[#16A34A] text-white hover:bg-[#15803D] focus-visible:ring-[#16A34A] shadow-sm",
+        "bg-[#16A34A] dark:bg-[#16A34A] text-white hover:bg-[#15803D] dark:hover:bg-[#15803D] focus-visible:ring-[#16A34A] shadow-sm",
       danger:
-        "bg-[#DC2626] text-white hover:bg-[#B91C1C] focus-visible:ring-[#DC2626] shadow-sm",
+        "bg-[#DC2626] dark:bg-[#DC2626] text-white hover:bg-[#B91C1C] dark:hover:bg-[#B91C1C] focus-visible:ring-[#DC2626] shadow-sm",
       ai:
-        "bg-[#5B21B6] text-white hover:bg-[#4C1D95] focus-visible:ring-[#5B21B6] shadow-sm",
+        "bg-[#5B21B6] dark:bg-[#7C3AED] text-white hover:bg-[#4C1D95] dark:hover:bg-[#6D28D9] focus-visible:ring-[#5B21B6] shadow-sm",
       ghost:
-        "bg-transparent text-[#0F172A] hover:bg-[#F1F5F9] focus-visible:ring-[#0B4EA2]",
+        "bg-transparent text-[#0F172A] dark:text-[#F8FAFC] hover:bg-[#F1F5F9] dark:hover:bg-[#1E293B] focus-visible:ring-[#0B4EA2]",
       outline:
-        "bg-transparent text-[#0F172A] border border-[#E2E8F0] hover:bg-[#F8FAFC] focus-visible:ring-[#0B4EA2]",
+        "bg-transparent text-[#0F172A] dark:text-[#CBD5E1] border border-[#E2E8F0] dark:border-[#2D3748] hover:bg-[#F8FAFC] dark:hover:bg-[#1E293B] hover:text-[#0F172A] dark:hover:text-[#F8FAFC] focus-visible:ring-[#0B4EA2]",
     };
 
     const sizeStyles: Record<string, string> = {

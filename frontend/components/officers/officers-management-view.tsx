@@ -37,68 +37,67 @@ export function OfficersManagementView({
     switch (status) {
       case "AVAILABLE":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#ECFDF3] text-[#15803D] border border-[#BBF7D0]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]" /> Available
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#ECFDF3] dark:bg-[#064E3B]/20 text-[#15803D] dark:text-[#34D399] border border-[#BBF7D0] dark:border-[#10B981]/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] dark:bg-[#34D399]" /> Available
           </span>
         );
       case "ON_DUTY":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#EAF2FF] text-[#0B4EA2] border border-[#BFDBFE]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#0B4EA2]" /> On Duty
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#EAF2FF] dark:bg-[#1E3A8A]/20 text-[#0B4EA2] dark:text-[#60A5FA] border border-[#BFDBFE] dark:border-[#1E40AF]/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#0B4EA2] dark:bg-[#60A5FA]" /> On Duty
           </span>
         );
       case "BUSY":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#FFF7E6] text-[#B45309] border border-[#FDE68A]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" /> Heavy Workload
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#FFF7E6] dark:bg-[#78350F]/20 text-[#B45309] dark:text-[#FBBF24] border border-[#FDE68A] dark:border-[#F59E0B]/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] dark:bg-[#FBBF24]" /> Heavy Workload
           </span>
         );
       case "OFF_DUTY":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#F1F5F9] text-[#64748B] border border-[#CBD5E1]">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#F1F5F9] dark:bg-[#161F30] text-[#64748B] dark:text-[#94A3B8] border border-[#CBD5E1] dark:border-[#2D3748]">
             <span className="w-1.5 h-1.5 rounded-full bg-[#94A3B8]" /> Off Duty
           </span>
         );
     }
   };
 
-
   return (
     <div className="space-y-6">
       {/* Overview stats bar */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] shadow-xs">
-          <span className="text-xs text-[#64748B] font-medium block">Total Field Officers</span>
-          <span className="text-2xl font-extrabold text-[#0F172A] mt-1 block">
+        <div className="bg-white dark:bg-[#111827] p-4 rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-xs transition-colors">
+          <span className="text-xs text-[#64748B] dark:text-[#94A3B8] font-medium block">Total Field Officers</span>
+          <span className="text-2xl font-extrabold text-[#0F172A] dark:text-[#F8FAFC] mt-1 block">
             {officers.length} Active
           </span>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] shadow-xs">
-          <span className="text-xs text-[#64748B] font-medium block">Available for Dispatch</span>
-          <span className="text-2xl font-extrabold text-[#15803D] mt-1 block">
+        <div className="bg-white dark:bg-[#111827] p-4 rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-xs transition-colors">
+          <span className="text-xs text-[#64748B] dark:text-[#94A3B8] font-medium block">Available for Dispatch</span>
+          <span className="text-2xl font-extrabold text-[#15803D] dark:text-[#34D399] mt-1 block">
             {officers.filter((o) => o.status === "AVAILABLE" || o.status === "ON_DUTY").length}
           </span>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] shadow-xs">
-          <span className="text-xs text-[#64748B] font-medium block">Average SLA Efficiency</span>
-          <span className="text-2xl font-extrabold text-[#0B4EA2] mt-1 block">94.2%</span>
+        <div className="bg-white dark:bg-[#111827] p-4 rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-xs transition-colors">
+          <span className="text-xs text-[#64748B] dark:text-[#94A3B8] font-medium block">Average SLA Efficiency</span>
+          <span className="text-2xl font-extrabold text-[#0B4EA2] dark:text-[#60A5FA] mt-1 block">94.2%</span>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] shadow-xs">
-          <span className="text-xs text-[#64748B] font-medium block">Avg Resolution Speed</span>
-          <span className="text-2xl font-extrabold text-[#5B21B6] mt-1 block">4.1 Hours</span>
+        <div className="bg-white dark:bg-[#111827] p-4 rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-xs transition-colors">
+          <span className="text-xs text-[#64748B] dark:text-[#94A3B8] font-medium block">Avg Resolution Speed</span>
+          <span className="text-2xl font-extrabold text-[#5B21B6] dark:text-[#C084FC] mt-1 block">4.1 Hours</span>
         </div>
       </div>
 
       {/* Filter toolbar */}
-      <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      <div className="bg-white dark:bg-[#111827] p-4 rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 transition-colors">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-[#64748B] absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-[#64748B] dark:text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Search officer by name, badge ID, or department..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-10 pl-9 pr-3 rounded-lg border border-[#CBD5E1] text-xs sm:text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:border-[#0B4EA2]"
+            className="w-full h-10 pl-9 pr-3 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-xs sm:text-sm text-[#0F172A] dark:text-[#F8FAFC] placeholder:text-[#94A3B8] dark:placeholder:text-[#64748B] focus:outline-none focus:border-[#0B4EA2] dark:focus:border-[#3B82F6]"
           />
         </div>
 
@@ -106,38 +105,38 @@ export function OfficersManagementView({
           <select
             value={selectedDept}
             onChange={(e) => setSelectedDept(e.target.value)}
-            className="h-10 px-3 rounded-lg border border-[#CBD5E1] text-xs sm:text-sm text-[#0F172A] bg-white focus:outline-none focus:border-[#0B4EA2]"
+            className="h-10 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] text-xs sm:text-sm text-[#0F172A] dark:text-[#F8FAFC] bg-white dark:bg-[#161F30] focus:outline-none focus:border-[#0B4EA2] dark:focus:border-[#3B82F6]"
           >
-            <option value="ALL">All Departments</option>
-            <option value="Waste Management">Waste Management</option>
-            <option value="Hydraulics & Water">Hydraulics & Water</option>
-            <option value="Public Works (PWD)">Public Works (PWD)</option>
-            <option value="Sanitation & Sewerage">Sanitation & Sewerage</option>
-            <option value="Power & Street Lighting">Power & Street Lighting</option>
+            <option value="ALL" className="dark:bg-[#161F30]">All Departments</option>
+            <option value="Waste Management" className="dark:bg-[#161F30]">Waste Management</option>
+            <option value="Hydraulics & Water" className="dark:bg-[#161F30]">Hydraulics & Water</option>
+            <option value="Public Works (PWD)" className="dark:bg-[#161F30]">Public Works (PWD)</option>
+            <option value="Sanitation & Sewerage" className="dark:bg-[#161F30]">Sanitation & Sewerage</option>
+            <option value="Power & Street Lighting" className="dark:bg-[#161F30]">Power & Street Lighting</option>
           </select>
 
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="h-10 px-3 rounded-lg border border-[#CBD5E1] text-xs sm:text-sm text-[#0F172A] bg-white focus:outline-none focus:border-[#0B4EA2]"
+            className="h-10 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] text-xs sm:text-sm text-[#0F172A] dark:text-[#F8FAFC] bg-white dark:bg-[#161F30] focus:outline-none focus:border-[#0B4EA2] dark:focus:border-[#3B82F6]"
           >
-            <option value="ALL">All Statuses</option>
-            <option value="AVAILABLE">AVAILABLE</option>
-            <option value="ON_DUTY">ON DUTY</option>
-            <option value="BUSY">BUSY</option>
-            <option value="OFF_DUTY">OFF DUTY</option>
+            <option value="ALL" className="dark:bg-[#161F30]">All Statuses</option>
+            <option value="AVAILABLE" className="dark:bg-[#161F30]">AVAILABLE</option>
+            <option value="ON_DUTY" className="dark:bg-[#161F30]">ON DUTY</option>
+            <option value="BUSY" className="dark:bg-[#161F30]">BUSY</option>
+            <option value="OFF_DUTY" className="dark:bg-[#161F30]">OFF DUTY</option>
           </select>
         </div>
       </div>
 
       {/* Officers Roster Table */}
-      <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-xs overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#E2E8F0] flex items-center justify-between">
+      <div className="bg-white dark:bg-[#111827] rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-xs overflow-hidden transition-colors">
+        <div className="px-5 py-4 border-b border-[#E2E8F0] dark:border-[#1E293B] flex items-center justify-between">
           <div>
-            <h3 className="font-bold text-base text-[#0F172A]">
+            <h3 className="font-bold text-base text-[#0F172A] dark:text-[#F8FAFC]">
               Department Officers Roster & Workload ({filteredOfficers.length})
             </h3>
-            <p className="text-xs text-[#64748B]">
+            <p className="text-xs text-[#64748B] dark:text-[#94A3B8]">
               Real-time workload distribution, contact details, and complaint assignment.
             </p>
           </div>
@@ -146,7 +145,7 @@ export function OfficersManagementView({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs sm:text-sm">
             <thead>
-              <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#475569] font-semibold text-xs uppercase tracking-wider">
+              <tr className="bg-[#F8FAFC] dark:bg-[#161F30] border-b border-[#E2E8F0] dark:border-[#1E293B] text-[#475569] dark:text-[#94A3B8] font-semibold text-xs uppercase tracking-wider">
                 <th className="py-3 px-4">Officer / Badge ID</th>
                 <th className="py-3 px-4">Department & Zone</th>
                 <th className="py-3 px-4">Availability</th>
@@ -156,56 +155,56 @@ export function OfficersManagementView({
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E2E8F0]">
+            <tbody className="divide-y divide-[#E2E8F0] dark:divide-[#1E293B]">
               {filteredOfficers.map((o) => (
-                <tr key={o.id} className="hover:bg-[#F8FAFC] transition-colors">
+                <tr key={o.id} className="hover:bg-[#F8FAFC] dark:hover:bg-[#161F30] transition-colors">
                   <td className="py-3.5 px-4">
-                    <span className="block font-bold text-[#0F172A]">{o.name}</span>
-                    <span className="block font-mono text-[11px] text-[#0B4EA2] font-semibold">
+                    <span className="block font-bold text-[#0F172A] dark:text-[#F8FAFC]">{o.name}</span>
+                    <span className="block font-mono text-[11px] text-[#0B4EA2] dark:text-[#60A5FA] font-semibold">
                       {o.badgeId} • {o.designation}
                     </span>
-                    <span className="block text-xs text-[#64748B] mt-0.5">
-                      📞 {o.mobileNumber}
+                    <span className="block text-xs text-[#64748B] dark:text-[#94A3B8] mt-0.5">
+                      {o.mobileNumber}
                     </span>
                   </td>
 
                   <td className="py-3.5 px-4">
-                    <span className="block font-medium text-[#0F172A]">{o.department}</span>
-                    <span className="block text-xs text-[#64748B]">📍 {o.assignedZone}</span>
+                    <span className="block font-medium text-[#0F172A] dark:text-[#F8FAFC]">{o.department}</span>
+                    <span className="block text-xs text-[#64748B] dark:text-[#94A3B8]">{o.assignedZone}</span>
                   </td>
 
                   <td className="py-3.5 px-4">{statusBadge(o.status)}</td>
 
-                  <td className="py-3.5 px-4 font-semibold text-[#0F172A]">
+                  <td className="py-3.5 px-4 font-semibold text-[#0F172A] dark:text-[#F8FAFC]">
                     <span
                       className={cn(
                         "inline-flex items-center px-2 py-0.5 rounded text-xs",
                         o.assignedComplaintsCount >= 5
-                          ? "bg-[#FEF2F2] text-[#DC2626] font-bold"
-                          : "bg-[#EAF2FF] text-[#0B4EA2]"
+                          ? "bg-[#FEF2F2] dark:bg-[#7F1D1D]/30 text-[#DC2626] dark:text-[#F87171] font-bold"
+                          : "bg-[#EAF2FF] dark:bg-[#1E3A8A]/30 text-[#0B4EA2] dark:text-[#60A5FA]"
                       )}
                     >
                       {o.assignedComplaintsCount} Complaints
                     </span>
                   </td>
 
-                  <td className="py-3.5 px-4 text-[#15803D] font-bold">
+                  <td className="py-3.5 px-4 text-[#15803D] dark:text-[#34D399] font-bold">
                     {o.resolvedComplaintsCount} Cases
                   </td>
 
                   <td className="py-3.5 px-4">
                     <div className="flex items-center gap-2">
-                      <div className="w-16 bg-[#E2E8F0] h-2 rounded-full overflow-hidden">
+                      <div className="w-16 bg-[#E2E8F0] dark:bg-[#1E293B] h-2 rounded-full overflow-hidden">
                         <div
-                          className="bg-[#16A34A] h-full rounded-full"
+                          className="bg-[#16A34A] dark:bg-[#10B981] h-full rounded-full"
                           style={{ width: `${o.performanceScore}%` }}
                         />
                       </div>
-                      <span className="font-bold text-xs text-[#0F172A]">
+                      <span className="font-bold text-xs text-[#0F172A] dark:text-[#F8FAFC]">
                         {o.performanceScore}%
                       </span>
                     </div>
-                    <span className="text-[10px] text-[#64748B] block mt-0.5">
+                    <span className="text-[10px] text-[#64748B] dark:text-[#94A3B8] block mt-0.5">
                       Avg: {o.averageResolutionHours} hrs/case
                     </span>
                   </td>
@@ -230,27 +229,27 @@ export function OfficersManagementView({
 
       {/* Quick Assign Modal */}
       {assignModalOfficer && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-[#CBD5E1] shadow-xl max-w-lg w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#111827] rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-xl max-w-lg w-full p-6 space-y-4 transition-colors">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] dark:border-[#1E293B] pb-3">
               <div>
-                <h3 className="font-bold text-base text-[#0F172A]">
+                <h3 className="font-bold text-base text-[#0F172A] dark:text-[#F8FAFC]">
                   Assign Complaint to {assignModalOfficer.name}
                 </h3>
-                <span className="text-xs text-[#64748B]">
+                <span className="text-xs text-[#64748B] dark:text-[#94A3B8]">
                   {assignModalOfficer.badgeId} • {assignModalOfficer.department}
                 </span>
               </div>
               <button
                 type="button"
                 onClick={() => setAssignModalOfficer(null)}
-                className="text-[#64748B] hover:text-[#0F172A]"
+                className="text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-[#F8FAFC]"
               >
                 ✕
               </button>
             </div>
 
-            <p className="text-xs text-[#64748B]">
+            <p className="text-xs text-[#64748B] dark:text-[#94A3B8]">
               Select from pending or unassigned civic grievances to allocate:
             </p>
 
@@ -258,16 +257,16 @@ export function OfficersManagementView({
               {complaints.slice(0, 5).map((comp) => (
                 <div
                   key={comp.id}
-                  className="p-3 rounded-lg border border-[#E2E8F0] hover:border-[#0B4EA2] transition-colors flex items-center justify-between gap-3 text-xs"
+                  className="p-3 rounded-lg border border-[#E2E8F0] dark:border-[#1E293B] bg-transparent dark:bg-[#161F30] hover:border-[#0B4EA2] dark:hover:border-[#3B82F6] transition-colors flex items-center justify-between gap-3 text-xs"
                 >
                   <div>
-                    <span className="font-mono font-bold text-[#0B4EA2]">
+                    <span className="font-mono font-bold text-[#0B4EA2] dark:text-[#60A5FA]">
                       {comp.trackingNumber}
                     </span>
-                    <span className="font-semibold text-[#0F172A] block truncate max-w-xs">
+                    <span className="font-semibold text-[#0F172A] dark:text-[#F8FAFC] block truncate max-w-xs">
                       {comp.title}
                     </span>
-                    <span className="text-[#64748B]">📍 {comp.location}</span>
+                    <span className="text-[#64748B] dark:text-[#94A3B8]">{comp.location}</span>
                   </div>
 
                   <Button
@@ -285,7 +284,7 @@ export function OfficersManagementView({
               ))}
             </div>
 
-            <div className="flex justify-end pt-3 border-t border-[#E2E8F0]">
+            <div className="flex justify-end pt-3 border-t border-[#E2E8F0] dark:border-[#1E293B]">
               <Button
                 variant="outline"
                 size="sm"

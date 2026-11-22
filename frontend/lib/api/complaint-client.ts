@@ -1,4 +1,4 @@
-import { getSessionToken } from "@/lib/auth/session";
+import { getSessionToken, clearSession } from "@/lib/auth/session";
 
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
@@ -75,13 +75,6 @@ export function getMyComplaintsApi(): Promise<TrackedComplaint[]> {
   return apiRequest<TrackedComplaint[]>("/complaints/my", {}, true);
 }
 
-export interface ComplaintChatResponse {
-  tracking_number: string;
-  answer: string;
-  answer_language: string;
-  status: Record<string, unknown>;
-}
-
 export interface VoiceTranscriptionResponse {
   text: string;
   language: "en" | "hi" | "mr";
@@ -97,12 +90,12 @@ async function apiRequest<T>(
   if (init.body && !(init.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
-  if (requiresAuth) {
-    const token = getSessionToken();
-    if (!token) {
-      throw new Error("Your session has expired. Please sign in again.");
-    }
+
+  const token = getSessionToken();
+  if (token) {
     headers.set("Authorization", `Bearer ${token}`);
+  } else if (requiresAuth) {
+    throw new Error("Your session has expired. Please sign in again.");
   }
 
   let response: Response;
@@ -118,6 +111,20 @@ async function apiRequest<T>(
 
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
+    if (response.status === 401) {
+      clearSession();
+      const message =
+        typeof payload === "object" &&
+        payload !== null &&
+        "message" in payload &&
+        typeof payload.message === "string" &&
+        !payload.message.toLowerCase().includes("invalid token")
+          ? payload.message
+          : "Your session has expired. Please sign in again.";
+      const error = new Error(message) as Error & { statusCode: number };
+      error.statusCode = 401;
+      throw error;
+    }
     const message =
       typeof payload === "object" &&
       payload !== null &&
@@ -157,7 +164,7 @@ export function transcribeComplaintAudioApi(
   return apiRequest<VoiceTranscriptionResponse>(
     "/ai/voice/transcribe",
     { method: "POST", body },
-    true
+    false
   );
 }
 
@@ -169,18 +176,62 @@ export function trackComplaintApi(
   );
 }
 
-export function askComplaintAssistantApi(
-  input: Pick<ComplaintChatResponse, "tracking_number"> & {
-    question: string;
-    language: "en" | "hi" | "mr";
-  }
-): Promise<ComplaintChatResponse> {
-  return apiRequest<ComplaintChatResponse>("/ai/chatbot/complaint", {
-    method: "POST",
-    body: JSON.stringify({
-      trackingNumber: input.tracking_number,
-      question: input.question,
-      language: input.language,
-    }),
-  });
+export interface VerifyComplaintDescriptionRequest {
+  description: string;
+  selected_category?: string | null;
+  language?: string;
+}
+
+export interface VerifyComplaintDescriptionResponse {
+  is_relevant: boolean;
+  predicted_category: string | null;
+  confidence: number;
+  status: "verified" | "mismatch" | "review_required" | "invalid";
+  message: string;
+  suggested_category?: string | null;
+  suggested_category_key?: string | null;
+}
+
+export function verifyComplaintDescriptionApi(
+  payload: VerifyComplaintDescriptionRequest
+): Promise<VerifyComplaintDescriptionResponse> {
+  return apiRequest<VerifyComplaintDescriptionResponse>(
+    "/complaints/verify-description",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    false
+  );
+}
+
+export interface ValidateComplaintImageRequest {
+  imageBase64: string;
+  contentType: "image/jpeg" | "image/png" | "image/webp";
+  category: string;
+  description: string;
+  language?: "en" | "hi" | "mr" | "auto";
+}
+
+export interface ValidateComplaintImageResponse {
+  status: "VALID" | "INVALID" | "NEEDS_REVIEW";
+  category_match: boolean;
+  description_match: boolean;
+  image_quality: "good" | "low_quality";
+  reason: string;
+  requires_manual_review: boolean;
+  duplicate_detected: boolean;
+}
+
+export function validateComplaintImageApi(
+  payload: ValidateComplaintImageRequest
+): Promise<ValidateComplaintImageResponse> {
+  return apiRequest<ValidateComplaintImageResponse>(
+    "/complaints/validate-image",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    false
+  );
 }

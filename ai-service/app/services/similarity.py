@@ -30,6 +30,15 @@ class ComplaintSimilarity:
         self.texts = None
 
     def _ensure_model(self):
+        if self.index is None and INDEX_PATH.is_file() and TEXTS_PATH.is_file():
+            try:
+                import faiss
+            except ImportError as exc:
+                raise RuntimeError(
+                    "Duplicate detection requires the optional dependencies in "
+                    "requirements-similarity.txt."
+                ) from exc
+
         if self.model is None:
             try:
                 from sentence_transformers import SentenceTransformer

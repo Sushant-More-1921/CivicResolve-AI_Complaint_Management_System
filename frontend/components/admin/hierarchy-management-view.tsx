@@ -110,15 +110,15 @@ export function HierarchyManagementView() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white p-5 rounded-xl border border-[#E2E8F0] shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="bg-white dark:bg-[#111827] p-5 rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-colors">
         <div>
           <div className="flex items-center gap-2">
-            <FolderTree className="w-5 h-5 text-[#0B4EA2]" />
-            <h3 className="font-extrabold text-base sm:text-lg text-[#0F172A]">
-              State Administrative Hierarchy & Jurisdiction Topology
+            <FolderTree className="w-5 h-5 text-[#0B4EA2] dark:text-[#60A5FA]" />
+            <h3 className="font-extrabold text-base sm:text-lg text-[#0F172A] dark:text-[#F8FAFC]">
+              Administrative Hierarchy & Jurisdictions
             </h3>
           </div>
-          <p className="text-xs sm:text-sm text-[#64748B] mt-0.5">
+          <p className="text-xs sm:text-sm text-[#64748B] dark:text-[#94A3B8] mt-0.5">
             Scalable model: <strong>State → Division → District/Local Authority → Department → Officer</strong>.
           </p>
         </div>
@@ -148,13 +148,13 @@ export function HierarchyManagementView() {
       {/* 3-Column Hierarchy Explorer */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* COLUMN 1: DIVISIONS */}
-        <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-xs p-4 space-y-3">
-          <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2">
-            <span className="font-bold text-xs uppercase tracking-wider text-[#0B4EA2] flex items-center gap-1.5">
-              <Layers className="w-4 h-4 text-[#0B4EA2]" />
+        <div className="bg-white dark:bg-[#111827] rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-xs p-4 space-y-3 transition-colors">
+          <div className="flex items-center justify-between border-b border-[#E2E8F0] dark:border-[#1E293B] pb-2">
+            <span className="font-bold text-xs uppercase tracking-wider text-[#0B4EA2] dark:text-[#60A5FA] flex items-center gap-1.5">
+              <Layers className="w-4 h-4 text-[#0B4EA2] dark:text-[#60A5FA]" />
               1. Divisions ({divisions.length})
             </span>
-            <span className="text-[10px] text-[#64748B]">State Level</span>
+            <span className="text-[10px] text-[#64748B] dark:text-[#94A3B8]">State Level</span>
           </div>
 
           <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -167,17 +167,17 @@ export function HierarchyManagementView() {
                   className={cn(
                     "p-3 rounded-lg border text-xs cursor-pointer transition-all flex items-center justify-between",
                     isSelected
-                      ? "border-[#0B4EA2] bg-[#EAF2FF] text-[#0B4EA2] font-semibold"
-                      : "border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A]"
+                      ? "border-[#0B4EA2] dark:border-[#3B82F6] bg-[#EAF2FF] dark:bg-[#1E3A8A]/30 text-[#0B4EA2] dark:text-[#60A5FA] font-semibold"
+                      : "border-[#E2E8F0] dark:border-[#1E293B] bg-transparent hover:bg-[#F8FAFC] dark:hover:bg-[#161F30] text-[#0F172A] dark:text-[#F8FAFC]"
                   )}
                 >
                   <div>
                     <span className="block font-bold">{div.name}</span>
-                    <span className="text-[11px] text-[#64748B]">
+                    <span className="text-[11px] text-[#64748B] dark:text-[#94A3B8]">
                       HQ: {div.headquarters} • Code: {div.code}
                     </span>
                   </div>
-                  <ChevronRight className={cn("w-4 h-4", isSelected ? "text-[#0B4EA2]" : "text-[#CBD5E1]")} />
+                  <ChevronRight className={cn("w-4 h-4", isSelected ? "text-[#0B4EA2] dark:text-[#60A5FA]" : "text-[#CBD5E1] dark:text-[#475569]")} />
                 </div>
               );
             })}
@@ -185,13 +185,13 @@ export function HierarchyManagementView() {
         </div>
 
         {/* COLUMN 2: LOCAL AUTHORITIES IN SELECTED DIVISION */}
-        <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-xs p-4 space-y-3">
-          <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2">
-            <span className="font-bold text-xs uppercase tracking-wider text-[#0F766E] flex items-center gap-1.5">
-              <Building2 className="w-4 h-4 text-[#0F766E]" />
+        <div className="bg-white dark:bg-[#111827] rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-xs p-4 space-y-3 transition-colors">
+          <div className="flex items-center justify-between border-b border-[#E2E8F0] dark:border-[#1E293B] pb-2">
+            <span className="font-bold text-xs uppercase tracking-wider text-[#0F766E] dark:text-[#2DD4BF] flex items-center gap-1.5">
+              <Building2 className="w-4 h-4 text-[#0F766E] dark:text-[#2DD4BF]" />
               2. Local Authorities ({activeDivAuthorities.length})
             </span>
-            <span className="text-[10px] text-[#64748B]">in {activeDiv.name}</span>
+            <span className="text-[10px] text-[#64748B] dark:text-[#94A3B8]">in {activeDiv.name}</span>
           </div>
 
           <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -204,23 +204,23 @@ export function HierarchyManagementView() {
                   className={cn(
                     "p-3 rounded-lg border text-xs cursor-pointer transition-all flex items-center justify-between",
                     isSelected
-                      ? "border-[#0F766E] bg-[#ECFEFF] text-[#0F766E] font-semibold"
-                      : "border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A]"
+                      ? "border-[#0F766E] dark:border-[#2DD4BF] bg-[#ECFEFF] dark:bg-[#134E4A]/30 text-[#0F766E] dark:text-[#2DD4BF] font-semibold"
+                      : "border-[#E2E8F0] dark:border-[#1E293B] bg-transparent hover:bg-[#F8FAFC] dark:hover:bg-[#161F30] text-[#0F172A] dark:text-[#F8FAFC]"
                   )}
                 >
                   <div>
                     <span className="block font-bold">{auth.name}</span>
-                    <span className="text-[11px] text-[#64748B]">
+                    <span className="text-[11px] text-[#64748B] dark:text-[#94A3B8]">
                       Type: {auth.type.replace("_", " ")}
                     </span>
                   </div>
-                  <ChevronRight className={cn("w-4 h-4", isSelected ? "text-[#0F766E]" : "text-[#CBD5E1]")} />
+                  <ChevronRight className={cn("w-4 h-4", isSelected ? "text-[#0F766E] dark:text-[#2DD4BF]" : "text-[#CBD5E1] dark:text-[#475569]")} />
                 </div>
               );
             })}
 
             {activeDivAuthorities.length === 0 && (
-              <div className="p-6 text-center text-xs text-[#64748B]">
+              <div className="p-6 text-center text-xs text-[#64748B] dark:text-[#94A3B8]">
                 No local authorities mapped yet under this division.
               </div>
             )}
@@ -228,10 +228,10 @@ export function HierarchyManagementView() {
         </div>
 
         {/* COLUMN 3: DEPARTMENTS UNDER SELECTED LOCAL AUTHORITY */}
-        <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-xs p-4 space-y-3">
-          <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2">
-            <span className="font-bold text-xs uppercase tracking-wider text-[#B45309] flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-[#B45309]" />
+        <div className="bg-white dark:bg-[#111827] rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-xs p-4 space-y-3 transition-colors">
+          <div className="flex items-center justify-between border-b border-[#E2E8F0] dark:border-[#1E293B] pb-2">
+            <span className="font-bold text-xs uppercase tracking-wider text-[#B45309] dark:text-[#FBBF24] flex items-center gap-1.5">
+              <Users className="w-4 h-4 text-[#B45309] dark:text-[#FBBF24]" />
               3. Departments ({activeAuthDepts.length})
             </span>
             <Button
@@ -248,25 +248,25 @@ export function HierarchyManagementView() {
             {activeAuthDepts.map((dept) => (
               <div
                 key={dept.id}
-                className="p-3 rounded-lg border border-[#E2E8F0] hover:border-[#CBD5E1] text-xs space-y-1 bg-[#F8FAFC]"
+                className="p-3 rounded-lg border border-[#E2E8F0] dark:border-[#1E293B] hover:border-[#CBD5E1] dark:hover:border-[#2D3748] text-xs space-y-1 bg-[#F8FAFC] dark:bg-[#161F30]"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-[#0F172A]">{dept.name}</span>
-                  <span className="text-[10px] font-mono text-[#0B4EA2] bg-[#EAF2FF] px-1.5 py-0.5 rounded">
+                  <span className="font-bold text-[#0F172A] dark:text-[#F8FAFC]">{dept.name}</span>
+                  <span className="text-[10px] font-mono text-[#0B4EA2] dark:text-[#60A5FA] bg-[#EAF2FF] dark:bg-[#1E3A8A]/30 px-1.5 py-0.5 rounded">
                     {dept.code}
                   </span>
                 </div>
-                <div className="text-[11px] text-[#64748B]">
+                <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8]">
                   Head: {dept.headOfficerName || "Designated Officer"}
                 </div>
-                <div className="text-[10px] text-[#16A34A] font-semibold">
+                <div className="text-[10px] text-[#16A34A] dark:text-[#34D399] font-semibold">
                   {dept.activeOfficersCount} On-Duty Field Officers
                 </div>
               </div>
             ))}
 
             {activeAuthDepts.length === 0 && (
-              <div className="p-6 text-center text-xs text-[#64748B]">
+              <div className="p-6 text-center text-xs text-[#64748B] dark:text-[#94A3B8]">
                 No departments configured for this authority yet.
               </div>
             )}
@@ -276,17 +276,17 @@ export function HierarchyManagementView() {
 
       {/* MODAL: ADD DIVISION */}
       {isAddDivisionOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-[#CBD5E1] shadow-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
-              <h4 className="font-bold text-base text-[#0F172A]">Add New Administrative Division</h4>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#111827] rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-xl max-w-md w-full p-6 space-y-4 transition-colors">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] dark:border-[#1E293B] pb-3">
+              <h4 className="font-bold text-base text-[#0F172A] dark:text-[#F8FAFC]">Add New Administrative Division</h4>
               <button type="button" onClick={() => setIsAddDivisionOpen(false)}>
-                <X className="w-5 h-5 text-[#64748B]" />
+                <X className="w-5 h-5 text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-[#F8FAFC]" />
               </button>
             </div>
             <form onSubmit={handleCreateDivision} className="space-y-4 text-xs">
               <div>
-                <label className="block font-semibold mb-1 text-[#0F172A]">
+                <label className="block font-semibold mb-1 text-[#0F172A] dark:text-[#F8FAFC]">
                   Division Name (e.g. Nagpur Division) *
                 </label>
                 <input
@@ -295,20 +295,20 @@ export function HierarchyManagementView() {
                   value={newDivName}
                   onChange={(e) => setNewDivName(e.target.value)}
                   placeholder="e.g. Nagpur Division"
-                  className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] text-sm"
+                  className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-[#0F172A] dark:text-[#F8FAFC] text-sm"
                 />
               </div>
               <div>
-                <label className="block font-semibold mb-1 text-[#0F172A]">Headquarters City</label>
+                <label className="block font-semibold mb-1 text-[#0F172A] dark:text-[#F8FAFC]">Headquarters City</label>
                 <input
                   type="text"
                   value={newDivHq}
                   onChange={(e) => setNewDivHq(e.target.value)}
                   placeholder="e.g. Nagpur"
-                  className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] text-sm"
+                  className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-[#0F172A] dark:text-[#F8FAFC] text-sm"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#E2E8F0]">
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#E2E8F0] dark:border-[#1E293B]">
                 <Button variant="outline" size="sm" onClick={() => setIsAddDivisionOpen(false)}>
                   Cancel
                 </Button>
@@ -323,19 +323,19 @@ export function HierarchyManagementView() {
 
       {/* MODAL: ADD LOCAL AUTHORITY */}
       {isAddAuthorityOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-[#CBD5E1] shadow-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
-              <h4 className="font-bold text-base text-[#0F172A]">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#111827] rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-xl max-w-md w-full p-6 space-y-4 transition-colors">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] dark:border-[#1E293B] pb-3">
+              <h4 className="font-bold text-base text-[#0F172A] dark:text-[#F8FAFC]">
                 Add Local Authority in {activeDiv.name}
               </h4>
               <button type="button" onClick={() => setIsAddAuthorityOpen(false)}>
-                <X className="w-5 h-5 text-[#64748B]" />
+                <X className="w-5 h-5 text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-[#F8FAFC]" />
               </button>
             </div>
             <form onSubmit={handleCreateAuthority} className="space-y-4 text-xs">
               <div>
-                <label className="block font-semibold mb-1 text-[#0F172A]">
+                <label className="block font-semibold mb-1 text-[#0F172A] dark:text-[#F8FAFC]">
                   Local Authority Name *
                 </label>
                 <input
@@ -344,22 +344,22 @@ export function HierarchyManagementView() {
                   value={newAuthName}
                   onChange={(e) => setNewAuthName(e.target.value)}
                   placeholder="e.g. Solapur Municipal Corporation"
-                  className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] text-sm"
+                  className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-[#0F172A] dark:text-[#F8FAFC] text-sm"
                 />
               </div>
               <div>
-                <label className="block font-semibold mb-1 text-[#0F172A]">Authority Type</label>
+                <label className="block font-semibold mb-1 text-[#0F172A] dark:text-[#F8FAFC]">Authority Type</label>
                 <select
                   value={newAuthType}
                   onChange={(e) => setNewAuthType(e.target.value as LocalAuthorityInfo["type"])}
-                  className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] text-sm"
+                  className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-[#0F172A] dark:text-[#F8FAFC] text-sm"
                 >
-                  <option value="MUNICIPAL_CORPORATION">Municipal Corporation (Maha Nagar Palika)</option>
-                  <option value="MUNICIPAL_COUNCIL">Municipal Council (Nagar Palika)</option>
-                  <option value="ZILLA_PARISHAD">Zilla Parishad (Rural District)</option>
+                  <option value="MUNICIPAL_CORPORATION" className="dark:bg-[#161F30]">Municipal Corporation (Maha Nagar Palika)</option>
+                  <option value="MUNICIPAL_COUNCIL" className="dark:bg-[#161F30]">Municipal Council (Nagar Palika)</option>
+                  <option value="ZILLA_PARISHAD" className="dark:bg-[#161F30]">Zilla Parishad (Rural District)</option>
                 </select>
               </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#E2E8F0]">
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#E2E8F0] dark:border-[#1E293B]">
                 <Button variant="outline" size="sm" onClick={() => setIsAddAuthorityOpen(false)}>
                   Cancel
                 </Button>
@@ -374,37 +374,37 @@ export function HierarchyManagementView() {
 
       {/* MODAL: ADD DEPARTMENT */}
       {isAddDeptOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-[#CBD5E1] shadow-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
-              <h4 className="font-bold text-base text-[#0F172A]">Register New Department</h4>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#111827] rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-xl max-w-md w-full p-6 space-y-4 transition-colors">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] dark:border-[#1E293B] pb-3">
+              <h4 className="font-bold text-base text-[#0F172A] dark:text-[#F8FAFC]">Register New Department</h4>
               <button type="button" onClick={() => setIsAddDeptOpen(false)}>
-                <X className="w-5 h-5 text-[#64748B]" />
+                <X className="w-5 h-5 text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-[#F8FAFC]" />
               </button>
             </div>
             <form onSubmit={handleCreateDept} className="space-y-4 text-xs">
               <div>
-                <label className="block font-semibold mb-1 text-[#0F172A]">Department Name *</label>
+                <label className="block font-semibold mb-1 text-[#0F172A] dark:text-[#F8FAFC]">Department Name *</label>
                 <input
                   type="text"
                   required
                   value={newDeptName}
                   onChange={(e) => setNewDeptName(e.target.value)}
                   placeholder="e.g. Encroachment & Town Planning"
-                  className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] text-sm"
+                  className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-[#0F172A] dark:text-[#F8FAFC] text-sm"
                 />
               </div>
               <div>
-                <label className="block font-semibold mb-1 text-[#0F172A]">Head of Department</label>
+                <label className="block font-semibold mb-1 text-[#0F172A] dark:text-[#F8FAFC]">Head of Department</label>
                 <input
                   type="text"
                   value={newDeptHead}
                   onChange={(e) => setNewDeptHead(e.target.value)}
                   placeholder="e.g. Er. Sanjay Patil"
-                  className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] text-sm"
+                  className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-[#0F172A] dark:text-[#F8FAFC] text-sm"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#E2E8F0]">
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#E2E8F0] dark:border-[#1E293B]">
                 <Button variant="outline" size="sm" onClick={() => setIsAddDeptOpen(false)}>
                   Cancel
                 </Button>

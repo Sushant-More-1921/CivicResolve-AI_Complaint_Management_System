@@ -1,3 +1,4 @@
+from importlib.util import find_spec
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
@@ -68,7 +69,8 @@ def analyze_payload(request: AnalyzeRequest) -> dict:
     duplicate_detection = None
     issue_cluster_id = None
 
-    if request.latitude is not None and request.previous_complaints:
+    has_similarity_deps = find_spec("sentence_transformers") is not None and find_spec("faiss") is not None
+    if request.latitude is not None and request.previous_complaints and has_similarity_deps:
         previous_complaints = []
         for complaint in request.previous_complaints:
             previous = complaint.model_dump()

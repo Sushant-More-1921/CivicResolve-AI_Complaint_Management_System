@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Shield,
   Search,
   FilePlus,
   ClipboardList,
@@ -12,11 +11,13 @@ import {
   Building2,
   User,
   LogOut,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { LanguageSwitcher } from "@/components/common/language-switcher";
+import { GlobalHeader } from "@/components/common/global-header";
 import { useLanguage } from "@/context/language-context";
-import { getSessionUser, clearSession } from "@/lib/auth/session";
+import { getSessionUser, getSessionToken, clearSession, saveSession } from "@/lib/auth/session";
+import { getUserProfileApi } from "@/lib/api/auth";
 import { AuthUser } from "@/types/auth";
 import ROUTES from "@/config/routes";
 
@@ -39,8 +40,17 @@ export default function HomePage() {
 
     const timer = setTimeout(() => {
       const user = getSessionUser();
+      const token = getSessionToken();
       if (user) {
         setCurrentUser(user);
+        if (token) {
+          getUserProfileApi(token).then((fresh) => {
+            if (fresh && fresh.name && fresh.name.trim()) {
+              setCurrentUser(fresh);
+              saveSession(token, fresh);
+            }
+          }).catch(() => {});
+        }
       }
     }, 0);
 
@@ -107,35 +117,29 @@ export default function HomePage() {
     },
   ];
 
+  const isStaff =
+    currentUser?.role === "SUPER_ADMIN" ||
+    currentUser?.role === "DEPARTMENT_ADMIN" ||
+    currentUser?.role === "ADMIN" ||
+    currentUser?.role === "OFFICER";
+
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-between text-[#0F172A] selection:bg-[#E2E8F0]">
-      {/* ==================== 1. OFFICIAL CIVIC HEADER ==================== */}
-      <header className="w-full bg-white border-b border-[#E2E8F0] sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
-          <Link href={ROUTES.HOME} className="flex items-center gap-3 shrink-0">
-            <div className="w-9 h-9 rounded-lg bg-[#0B4EA2] flex items-center justify-center text-white shrink-0">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <span className="block text-base sm:text-lg font-bold text-[#0F172A] leading-tight">
-                {t("brandName")}
-              </span>
-              <span className="block text-[11px] text-[#64748B]">
-                {t("brandSubtitle")}
-              </span>
-            </div>
-          </Link>
-
-          {/* User, Officer Navigation & Language Switcher */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
-            {/* Header Language Switcher */}
-            <LanguageSwitcher />
-
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0B0F17] flex flex-col justify-between text-[#0F172A] dark:text-[#F8FAFC] selection:bg-[#E2E8F0] dark:selection:bg-[#1E293B] transition-colors">
+      {/* 1. CIVIC HEADER */}
+      <GlobalHeader
+        subtitle={t("brandSubtitle")}
+        actions={
+          <>
             {currentUser ? (
               <>
-                <Link href={ROUTES.CITIZEN.DASHBOARD}>
-                  <Button variant="outline" size="sm" className="text-xs" leftIcon={<User className="w-3.5 h-3.5" />}>
-                    {t("myComplaints")}
+                <Link href={isStaff ? ROUTES.ADMIN.DASHBOARD : ROUTES.CITIZEN.DASHBOARD}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                    leftIcon={<User className="w-3.5 h-3.5 text-[#0B4EA2] dark:text-[#60A5FA]" />}
+                  >
+                    {currentUser.name && currentUser.name.trim() !== "" && currentUser.name !== "Citizen" ? currentUser.name : t("myComplaints")}
                   </Button>
                 </Link>
                 <Button
@@ -146,48 +150,38 @@ export default function HomePage() {
                     setCurrentUser(null);
                     router.push(ROUTES.HOME);
                   }}
-                  className="text-xs text-[#64748B]"
+                  className="text-xs text-[#64748B] dark:text-[#94A3B8]"
                   leftIcon={<LogOut className="w-3.5 h-3.5" />}
                 >
                   {t("logout")}
                 </Button>
               </>
             ) : (
-              <Link href={ROUTES.AUTH.CITIZEN_LOGIN}>
-                <Button variant="ghost" size="sm" className="text-xs font-semibold">
-                  {t("citizenLogin")}
+              <Link href={ROUTES.AUTH.LOGIN}>
+                <Button variant="primary" size="sm" className="text-xs font-semibold">
+                  {t("signInBtn", "Sign In")}
                 </Button>
               </Link>
             )}
-
-            <Link href={ROUTES.ADMIN.DASHBOARD}>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs border-[#CBD5E1] text-[#334155]"
-                leftIcon={<Building2 className="w-3.5 h-3.5 text-[#0B4EA2]" />}
-              >
-                {t("officerPortal")}
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {deletedNotice && (
-        <div className="w-full bg-emerald-50 border-b border-emerald-200 py-3 px-4 text-center text-xs font-semibold text-emerald-800 animate-in fade-in duration-300">
-          ✅ Your citizen account and personal records have been permanently deleted from the municipal database.
+        <div className="w-full bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200 dark:border-emerald-800 py-3 px-4 text-center text-xs font-semibold text-emerald-800 dark:text-emerald-300 animate-in fade-in duration-300 flex items-center justify-center gap-1.5">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span>Your citizen account and personal records have been removed from the database.</span>
         </div>
       )}
 
-      {/* ==================== 2. HERO & 3 PRIMARY ACTIONS ==================== */}
+      {/* 2. HERO & PRIMARY ACTIONS */}
       <main className="flex-1">
-        <section className="bg-white border-b border-[#E2E8F0] py-10 sm:py-14">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center space-y-4">
-            <h1 className="text-2xl sm:text-4xl font-extrabold text-[#0F172A] tracking-tight">
+        <section className="bg-white dark:bg-[#0D131F] border-b border-[#E2E8F0] dark:border-[#1E293B] py-10 sm:py-14 transition-colors">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center space-y-3">
+            <h1 className="text-2xl sm:text-4xl font-extrabold text-[#0F172A] dark:text-[#F8FAFC] tracking-tight">
               {t("heroTitle")}
             </h1>
-            <p className="text-sm sm:text-base text-[#475569] max-w-2xl mx-auto leading-relaxed">
+            <p className="text-sm sm:text-base text-[#475569] dark:text-[#94A3B8] max-w-2xl mx-auto leading-relaxed">
               {t("heroSubtitle")}
             </p>
           </div>
@@ -196,15 +190,15 @@ export default function HomePage() {
           <div className="max-w-5xl mx-auto px-4 sm:px-6 mt-8">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {/* Action 1: Register a Complaint */}
-              <div className="bg-[#F8FAFC] p-6 rounded-xl border border-[#E2E8F0] flex flex-col justify-between hover:border-[#CBD5E1] transition-colors">
+              <div className="bg-[#F8FAFC] dark:bg-[#111827] p-6 rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] flex flex-col justify-between hover:border-[#CBD5E1] dark:hover:border-[#334155] transition-colors shadow-2xs">
                 <div className="space-y-3">
-                  <div className="w-10 h-10 rounded-lg bg-[#EAF2FF] text-[#0B4EA2] flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-[#EAF2FF] dark:bg-[#1E3A8A]/30 text-[#0B4EA2] dark:text-[#60A5FA] flex items-center justify-center">
                     <FilePlus className="w-5 h-5" />
                   </div>
-                  <h2 className="text-base font-bold text-[#0F172A]">
+                  <h2 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">
                     {t("action1Title")}
                   </h2>
-                  <p className="text-xs text-[#64748B] leading-relaxed">
+                  <p className="text-xs text-[#64748B] dark:text-[#94A3B8] leading-relaxed">
                     {t("action1Desc")}
                   </p>
                 </div>
@@ -212,8 +206,10 @@ export default function HomePage() {
                   <Link
                     href={
                       currentUser
-                        ? ROUTES.CITIZEN.NEW_COMPLAINT
-                        : `${ROUTES.AUTH.CITIZEN_LOGIN}?redirect=/citizen/complaints/new`
+                        ? isStaff
+                          ? ROUTES.ADMIN.DASHBOARD
+                          : ROUTES.CITIZEN.NEW_COMPLAINT
+                        : `${ROUTES.AUTH.LOGIN}?redirect=/citizen/complaints/new`
                     }
                     className="block"
                   >
@@ -225,15 +221,15 @@ export default function HomePage() {
               </div>
 
               {/* Action 2: Track Complaint Status */}
-              <div className="bg-[#F8FAFC] p-6 rounded-xl border border-[#E2E8F0] flex flex-col justify-between hover:border-[#CBD5E1] transition-colors">
+              <div className="bg-[#F8FAFC] dark:bg-[#111827] p-6 rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] flex flex-col justify-between hover:border-[#CBD5E1] dark:hover:border-[#334155] transition-colors shadow-2xs">
                 <div className="space-y-3">
-                  <div className="w-10 h-10 rounded-lg bg-[#EAF2FF] text-[#0B4EA2] flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-[#EAF2FF] dark:bg-[#1E3A8A]/30 text-[#0B4EA2] dark:text-[#60A5FA] flex items-center justify-center">
                     <Search className="w-5 h-5" />
                   </div>
-                  <h2 className="text-base font-bold text-[#0F172A]">
+                  <h2 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">
                     {t("action2Title")}
                   </h2>
-                  <p className="text-xs text-[#64748B] leading-relaxed">
+                  <p className="text-xs text-[#64748B] dark:text-[#94A3B8] leading-relaxed">
                     {t("action2Desc")}
                   </p>
                 </div>
@@ -243,24 +239,24 @@ export default function HomePage() {
                     placeholder={t("action2Placeholder")}
                     value={trackingInput}
                     onChange={(e) => setTrackingInput(e.target.value)}
-                    className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] bg-white text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:border-[#0B4EA2]"
+                    className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-xs text-[#0F172A] dark:text-[#F8FAFC] placeholder:text-[#94A3B8] dark:placeholder:text-[#64748B] focus:outline-none focus:border-[#0B4EA2] dark:focus:border-[#3B82F6]"
                   />
-                  <Button type="submit" variant="outline" size="md" className="w-full text-xs font-semibold border-[#CBD5E1]">
+                  <Button type="submit" variant="outline" size="md" className="w-full text-xs font-semibold border-[#CBD5E1] dark:border-[#2D3748]">
                     {t("action2Btn")}
                   </Button>
                 </form>
               </div>
 
               {/* Action 3: My Complaints */}
-              <div className="bg-[#F8FAFC] p-6 rounded-xl border border-[#E2E8F0] flex flex-col justify-between hover:border-[#CBD5E1] transition-colors">
+              <div className="bg-[#F8FAFC] dark:bg-[#111827] p-6 rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] flex flex-col justify-between hover:border-[#CBD5E1] dark:hover:border-[#334155] transition-colors shadow-2xs">
                 <div className="space-y-3">
-                  <div className="w-10 h-10 rounded-lg bg-[#EAF2FF] text-[#0B4EA2] flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-[#EAF2FF] dark:bg-[#1E3A8A]/30 text-[#0B4EA2] dark:text-[#60A5FA] flex items-center justify-center">
                     <ClipboardList className="w-5 h-5" />
                   </div>
-                  <h2 className="text-base font-bold text-[#0F172A]">
+                  <h2 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">
                     {t("action3Title")}
                   </h2>
-                  <p className="text-xs text-[#64748B] leading-relaxed">
+                  <p className="text-xs text-[#64748B] dark:text-[#94A3B8] leading-relaxed">
                     {t("action3Desc")}
                   </p>
                 </div>
@@ -268,12 +264,14 @@ export default function HomePage() {
                   <Link
                     href={
                       currentUser
-                        ? ROUTES.CITIZEN.DASHBOARD
-                        : `${ROUTES.AUTH.CITIZEN_LOGIN}?redirect=/citizen/dashboard`
+                        ? isStaff
+                          ? ROUTES.ADMIN.DASHBOARD
+                          : ROUTES.CITIZEN.DASHBOARD
+                        : `${ROUTES.AUTH.LOGIN}?redirect=/citizen/dashboard`
                     }
                     className="block"
                   >
-                    <Button variant="outline" size="md" className="w-full text-xs font-semibold border-[#CBD5E1]">
+                    <Button variant="outline" size="md" className="w-full text-xs font-semibold border-[#CBD5E1] dark:border-[#2D3748]">
                       {t("action3Btn")}
                     </Button>
                   </Link>
@@ -283,14 +281,14 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ==================== 3. REPORTABLE CATEGORIES ==================== */}
-        <section className="py-12 bg-[#F8FAFC]">
+        {/* 3. CIVIC CATEGORIES */}
+        <section className="py-12 bg-[#F8FAFC] dark:bg-[#0B0F17] transition-colors">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
             <div className="text-center max-w-xl mx-auto mb-8 space-y-1">
-              <h2 className="text-xl font-bold text-[#0F172A]">
+              <h2 className="text-xl font-bold text-[#0F172A] dark:text-[#F8FAFC]">
                 {t("categoriesTitle")}
               </h2>
-              <p className="text-xs text-[#64748B]">
+              <p className="text-xs text-[#64748B] dark:text-[#94A3B8]">
                 {t("categoriesSubtitle")}
               </p>
             </div>
@@ -299,27 +297,29 @@ export default function HomePage() {
               {categories.map((cat, idx) => (
                 <div
                   key={idx}
-                  className="bg-white p-5 rounded-xl border border-[#E2E8F0] flex flex-col justify-between"
+                  className="bg-white dark:bg-[#111827] p-5 rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] flex flex-col justify-between shadow-2xs hover:border-[#CBD5E1] dark:hover:border-[#334155] transition-colors"
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <h3 className="font-bold text-sm text-[#0F172A]">{cat.name}</h3>
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0]">
+                      <h3 className="font-bold text-sm text-[#0F172A] dark:text-[#F8FAFC]">{cat.name}</h3>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[#F1F5F9] dark:bg-[#1E293B] text-[#475569] dark:text-[#94A3B8] border border-[#E2E8F0] dark:border-[#2D3748]">
                         {cat.sla}
                       </span>
                     </div>
-                    <p className="text-xs text-[#64748B] leading-relaxed">
+                    <p className="text-xs text-[#64748B] dark:text-[#94A3B8] leading-relaxed">
                       {cat.desc}
                     </p>
                   </div>
-                  <div className="pt-3 mt-3 border-t border-[#F1F5F9]">
+                  <div className="pt-3 mt-3 border-t border-[#F1F5F9] dark:border-[#1E293B]">
                     <Link
                       href={
                         currentUser
-                          ? ROUTES.CITIZEN.NEW_COMPLAINT
-                          : `${ROUTES.AUTH.CITIZEN_LOGIN}?redirect=/citizen/complaints/new`
+                          ? isStaff
+                            ? ROUTES.ADMIN.DASHBOARD
+                            : ROUTES.CITIZEN.NEW_COMPLAINT
+                          : `${ROUTES.AUTH.LOGIN}?redirect=/citizen/complaints/new`
                       }
-                      className="text-xs font-semibold text-[#0B4EA2] hover:underline flex items-center gap-1"
+                      className="text-xs font-semibold text-[#0B4EA2] dark:text-[#60A5FA] hover:underline flex items-center gap-1"
                     >
                       <span>{t("catActionLink")}</span>
                       <ArrowRight className="w-3 h-3" />
@@ -331,26 +331,26 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ==================== 4. HOW IT WORKS (CLEAN & SIMPLE) ==================== */}
-        <section className="py-12 bg-white border-t border-b border-[#E2E8F0]">
+        {/* 4. REDRESSAL PROCESS */}
+        <section className="py-12 bg-white dark:bg-[#0D131F] border-t border-b border-[#E2E8F0] dark:border-[#1E293B] transition-colors">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
             <div className="text-center max-w-xl mx-auto mb-8 space-y-1">
-              <h2 className="text-xl font-bold text-[#0F172A]">
+              <h2 className="text-xl font-bold text-[#0F172A] dark:text-[#F8FAFC]">
                 {t("processTitle")}
               </h2>
-              <p className="text-xs text-[#64748B]">
+              <p className="text-xs text-[#64748B] dark:text-[#94A3B8]">
                 {t("processSubtitle")}
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {processSteps.map((item) => (
-                <div key={item.step} className="p-5 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-2">
-                  <div className="w-7 h-7 rounded-full bg-[#0B4EA2] text-white flex items-center justify-center font-bold text-xs">
+                <div key={item.step} className="p-5 rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC] dark:bg-[#111827] space-y-2 shadow-2xs">
+                  <div className="w-7 h-7 rounded-full bg-[#0B4EA2] dark:bg-[#2563EB] text-white flex items-center justify-center font-bold text-xs">
                     {item.step}
                   </div>
-                  <h3 className="font-bold text-sm text-[#0F172A]">{item.title}</h3>
-                  <p className="text-xs text-[#64748B] leading-relaxed">
+                  <h3 className="font-bold text-sm text-[#0F172A] dark:text-[#F8FAFC]">{item.title}</h3>
+                  <p className="text-xs text-[#64748B] dark:text-[#94A3B8] leading-relaxed">
                     {item.desc}
                   </p>
                 </div>
@@ -360,11 +360,11 @@ export default function HomePage() {
         </section>
       </main>
 
-      {/* ==================== 5. INSTITUTIONAL FOOTER ==================== */}
-      <footer className="bg-white border-t border-[#E2E8F0] py-8 px-4 sm:px-6 text-xs text-[#64748B]">
+      {/* 5. FOOTER */}
+      <footer className="bg-white dark:bg-[#0D131F] border-t border-[#E2E8F0] dark:border-[#1E293B] py-8 px-4 sm:px-6 text-xs text-[#64748B] dark:text-[#94A3B8] transition-colors">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="space-y-1 text-center md:text-left">
-            <span className="font-bold text-[#0F172A] block">
+            <span className="font-bold text-[#0F172A] dark:text-[#F8FAFC] block">
               {t("brandName")}
             </span>
             <p className="text-[11px]">
@@ -372,23 +372,23 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-[#475569]">
-            <Link href={ROUTES.COMPLAINTS.TRACK} className="hover:text-[#0B4EA2]">
+          <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-[#475569] dark:text-[#CBD5E1]">
+            <Link href={ROUTES.COMPLAINTS.TRACK} className="hover:text-[#0B4EA2] dark:hover:text-[#60A5FA] transition-colors">
               {t("trackStatus")}
             </Link>
-            <Link href={ROUTES.CITIZEN.NEW_COMPLAINT} className="hover:text-[#0B4EA2]">
+            <Link href={ROUTES.CITIZEN.NEW_COMPLAINT} className="hover:text-[#0B4EA2] dark:hover:text-[#60A5FA] transition-colors">
               {t("registerComplaint")}
             </Link>
-            <Link href={ROUTES.CITIZEN.DASHBOARD} className="hover:text-[#0B4EA2]">
+            <Link href={ROUTES.CITIZEN.DASHBOARD} className="hover:text-[#0B4EA2] dark:hover:text-[#60A5FA] transition-colors">
               {t("myComplaints")}
             </Link>
-            <Link href={ROUTES.AUTH.ADMIN_LOGIN} className="hover:text-[#0B4EA2]">
-              {t("officerLogin")}
+            <Link href={ROUTES.AUTH.LOGIN} className="hover:text-[#0B4EA2] dark:hover:text-[#60A5FA] transition-colors">
+              {t("signInBtn", "Sign In")}
             </Link>
           </div>
         </div>
 
-        <div className="max-w-5xl mx-auto pt-6 mt-6 border-t border-[#E2E8F0] text-center text-[11px] text-[#94A3B8]">
+        <div className="max-w-5xl mx-auto pt-6 mt-6 border-t border-[#E2E8F0] dark:border-[#1E293B] text-center text-[11px] text-[#94A3B8] dark:text-[#64748B]">
           © {new Date().getFullYear()} {t("allRightsReserved")}
         </div>
       </footer>

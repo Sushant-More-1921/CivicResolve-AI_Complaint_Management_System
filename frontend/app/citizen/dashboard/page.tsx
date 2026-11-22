@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { NotificationBell } from "@/components/common/notification-bell";
 import { useRouter } from "next/navigation";
 import {
   Shield,
@@ -24,11 +25,12 @@ import {
   Mail,
   AlertCircle,
   Trash2,
+  Bell,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/common/status-badge";
-import { PriorityBadge } from "@/components/common/priority-badge";
-import { subscribeToRealTime } from "@/lib/realtime/events";
+import { subscribeToRealTime, emitRealTimeEvent } from "@/lib/realtime/events";
 import { getSessionUser, getSessionToken, clearSession, saveSession } from "@/lib/auth/session";
 import { updateCitizenProfileApi, deleteCitizenAccountApi, getUserProfileApi } from "@/lib/api/auth";
 import { MAHARASHTRA_DIVISIONS } from "@/components/auth/citizen-details-form";
@@ -40,6 +42,7 @@ import { Complaint, ComplaintStatus, CitizenFeedback } from "@/types/complaint";
 import { AuthUser } from "@/types/auth";
 import ROUTES from "@/config/routes";
 import { LanguageSwitcher } from "@/components/common/language-switcher";
+import { GlobalHeader } from "@/components/common/global-header";
 import { useLanguage } from "@/context/language-context";
 
 interface CitizenProfileData {
@@ -51,6 +54,11 @@ interface CitizenProfileData {
   ward?: string;
   aadhaarMasked: string;
   smsAlerts: boolean;
+  websiteNotifications: boolean;
+  smsNotifications: boolean;
+  notifyStatusChange: boolean;
+  notifyResolution: boolean;
+  notifyInfoRequest: boolean;
 }
 
 
@@ -112,7 +120,7 @@ export default function CitizenDashboardPage() {
   // Session & Authentication
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [, setToken] = useState<string | null>(null);
-  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
 
   // Active Main Navigation Tab
   const [mainTab, setMainTab] = useState<"COMPLAINTS" | "PROFILE" | "FEEDBACK">("COMPLAINTS");
@@ -128,19 +136,19 @@ export default function CitizenDashboardPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Profile State
-  const [profile, setProfile] = useState<CitizenProfileData>(() => {
-    const sessionUser = typeof window !== "undefined" ? getSessionUser() : null;
-    const phone = sessionUser?.mobileNumber || "";
-    const cleanDigits = phone.replace(/\D/g, "").slice(-4) || "4819";
-    return {
-      fullName: sessionUser?.name && sessionUser.name !== "Verified Citizen" ? sessionUser.name : (sessionUser?.name || "Verified Citizen"),
-      email: sessionUser?.email || "",
-      address: sessionUser?.address || "",
-      pincode: sessionUser?.pincode || "",
-      district: sessionUser?.district || MAHARASHTRA_DIVISIONS[0],
-      aadhaarMasked: `XXXX-XXXX-${cleanDigits}`,
-      smsAlerts: true,
-    };
+  const [profile, setProfile] = useState<CitizenProfileData>({
+    fullName: "Citizen",
+    email: "",
+    address: "",
+    pincode: "",
+    district: MAHARASHTRA_DIVISIONS[0],
+    aadhaarMasked: "XXXX-XXXX-4819",
+    smsAlerts: true,
+    websiteNotifications: true,
+    smsNotifications: true,
+    notifyStatusChange: true,
+    notifyResolution: true,
+    notifyInfoRequest: true,
   });
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [tempProfile, setTempProfile] = useState<CitizenProfileData>(profile);
@@ -172,101 +180,137 @@ export default function CitizenDashboardPage() {
           }
         }
       } catch (error) {
-        console.error("Saved citizen feedback could not be loaded.", error);
+        console.error('Saved citizen feedback could not be loaded.', error);
       }
-      setComplaints(
-        backendData.map((item) => ({
-          ...toComplaint(item, mobileNumber),
-          ...(feedbackByTracking[item.trackingNumber]
-            ? { feedback: feedbackByTracking[item.trackingNumber] }
-            : {}),
-        }))
-      );
+      const transformed = backendData.map((item) => ({
+        ...toComplaint(item, mobileNumber),
+        ...(feedbackByTracking[item.trackingNumber]
+          ? { feedback: feedbackByTracking[item.trackingNumber] }
+          : {}),
+      }));
+      setComplaints(transformed);
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(`civic_cached_complaints_${userId}`, JSON.stringify(transformed));
+        } catch { }
+      }
       setComplaintLoadError(null);
-    } catch (error) {
-      setComplaintLoadError(
-        error instanceof Error
-          ? error.message
-          : "Could not load your complaints. Please try again."
-      );
+    } catch (error: any) {
+      const errMsg = error instanceof Error ? error.message : "Could not load your complaints. Please try again.";
+      if (
+        typeof errMsg === "string" &&
+        (errMsg.toLowerCase().includes("session") ||
+          errMsg.toLowerCase().includes("token") ||
+          errMsg.toLowerCase().includes("unauthorized"))
+      ) {
+        clearSession();
+        setComplaintLoadError("Your login session has expired. Please sign in again with your mobile number to view complaints.");
+        return;
+      }
+      setComplaintLoadError(errMsg);
     }
   }, []);
 
   useEffect(() => {
     const sessionToken = getSessionToken();
     const sessionUser = getSessionUser();
+    const normalizedRole = sessionUser?.role === "ADMIN" ? "DEPARTMENT_ADMIN" : sessionUser?.role;
     if (!sessionToken || !sessionUser) {
-      router.replace(`${ROUTES.AUTH.CITIZEN_LOGIN}?redirect=/citizen/dashboard`);
+      router.replace(`${ROUTES.AUTH.LOGIN}?redirect=/citizen/dashboard`);
+      return;
+    }
+    if (normalizedRole !== "CITIZEN") {
+      router.replace(ROUTES.ADMIN.DASHBOARD);
       return;
     }
 
     let isSubscribed = true;
-    const timer = setTimeout(async () => {
-      if (!isSubscribed) return;
-      setToken(sessionToken);
-      setCurrentUser(sessionUser);
+    setToken(sessionToken);
+    setCurrentUser(sessionUser);
 
-      // Populate from current sessionUser immediately
-      const phoneDigits = sessionUser.mobileNumber.replace(/\D/g, "").slice(-4) || "4819";
-      const initialProfile: CitizenProfileData = {
-        fullName: sessionUser.name && sessionUser.name !== "Verified Citizen" ? sessionUser.name : (sessionUser.name || "Citizen"),
-        email: sessionUser.email || "",
-        address: sessionUser.address || "",
-        pincode: sessionUser.pincode || "",
-        district: sessionUser.district || MAHARASHTRA_DIVISIONS[0],
-        aadhaarMasked: `XXXX-XXXX-${phoneDigits}`,
-        smsAlerts: true,
-      };
-
-      // Check if there is a local cache
-      if (typeof window !== "undefined") {
-        const cleanPhone = sessionUser.mobileNumber.replace(/\D/g, "");
-        const savedProfile = localStorage.getItem(`civic_profile_${cleanPhone}`) || localStorage.getItem(`civic_profile_${sessionUser.mobileNumber}`);
-        if (savedProfile) {
-          try {
-            const parsed = JSON.parse(savedProfile);
-            setProfile((prev) => ({ ...prev, ...parsed }));
-          } catch {
-            setProfile(initialProfile);
+    // Pre-populate cached complaints immediately (0ms visual delay)
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(`civic_cached_complaints_${sessionUser.id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setComplaints(parsed);
           }
-        } else {
+        }
+      } catch { }
+    }
+
+    // Populate profile from current sessionUser immediately (0ms visual delay)
+    const phoneDigits = sessionUser.mobileNumber.replace(/\D/g, "").slice(-4) || "4819";
+    const initialProfile: CitizenProfileData = {
+      fullName: sessionUser.name && sessionUser.name !== "Verified Citizen" && sessionUser.name !== "Citizen" ? sessionUser.name : (sessionUser.name || "Citizen"),
+      email: sessionUser.email || "",
+      address: sessionUser.address || "",
+      pincode: sessionUser.pincode || "",
+      district: sessionUser.district || MAHARASHTRA_DIVISIONS[0],
+      aadhaarMasked: `XXXX-XXXX-${phoneDigits}`,
+      smsAlerts: sessionUser.smsNotifications ?? true,
+      websiteNotifications: sessionUser.websiteNotifications ?? true,
+      smsNotifications: sessionUser.smsNotifications ?? true,
+      notifyStatusChange: sessionUser.notifyStatusChange ?? true,
+      notifyResolution: sessionUser.notifyResolution ?? true,
+      notifyInfoRequest: sessionUser.notifyInfoRequest ?? true,
+    };
+
+    if (typeof window !== "undefined") {
+      const cleanPhone = sessionUser.mobileNumber.replace(/\D/g, "");
+      const savedProfile = localStorage.getItem(`civic_profile_${cleanPhone}`) || localStorage.getItem(`civic_profile_${sessionUser.mobileNumber}`);
+      if (savedProfile) {
+        try {
+          const parsed = JSON.parse(savedProfile);
+          setProfile((prev) => ({ ...prev, ...parsed }));
+        } catch {
           setProfile(initialProfile);
         }
       } else {
         setProfile(initialProfile);
       }
+    } else {
+      setProfile(initialProfile);
+    }
 
-      // Always fetch fresh profile directly from backend Supabase DB
-      try {
-        const freshUser = await getUserProfileApi(sessionToken);
-        if (freshUser && isSubscribed) {
-          saveSession(sessionToken, freshUser);
-          setCurrentUser(freshUser);
-          const freshDigits = freshUser.mobileNumber.replace(/\D/g, "").slice(-4) || phoneDigits;
-          const freshProfile: CitizenProfileData = {
-            fullName: freshUser.name || sessionUser.name || "Citizen",
-            email: freshUser.email || "",
-            address: freshUser.address || sessionUser.address || "",
-            pincode: freshUser.pincode || sessionUser.pincode || "",
-            district: freshUser.district || sessionUser.district || MAHARASHTRA_DIVISIONS[0],
-            aadhaarMasked: `XXXX-XXXX-${freshDigits}`,
-            smsAlerts: true,
-          };
-          setProfile(freshProfile);
+    setIsAuthChecking(false);
 
-          if (typeof window !== "undefined") {
-            const cleanPhone = freshUser.mobileNumber.replace(/\D/g, "");
-            localStorage.setItem(`civic_profile_${cleanPhone}`, JSON.stringify(freshProfile));
-            localStorage.setItem(`civic_profile_${freshUser.mobileNumber}`, JSON.stringify(freshProfile));
-          }
+    // Launch complaint data fetch immediately in parallel
+    loadData(sessionUser.mobileNumber, sessionUser.id);
+
+    // Background profile refresh (non-blocking)
+    getUserProfileApi(sessionToken).then((freshUser) => {
+      if (freshUser && isSubscribed) {
+        saveSession(sessionToken, freshUser);
+        setCurrentUser(freshUser);
+        const freshDigits = freshUser.mobileNumber.replace(/\D/g, "").slice(-4) || phoneDigits;
+        const freshProfile: CitizenProfileData = {
+          fullName: freshUser.name || sessionUser.name || "Citizen",
+          email: freshUser.email || "",
+          address: freshUser.address || sessionUser.address || "",
+          pincode: freshUser.pincode || sessionUser.pincode || "",
+          district: freshUser.district || sessionUser.district || MAHARASHTRA_DIVISIONS[0],
+          aadhaarMasked: `XXXX-XXXX-${freshDigits}`,
+          smsAlerts: freshUser.smsNotifications ?? true,
+          websiteNotifications: freshUser.websiteNotifications ?? true,
+          smsNotifications: freshUser.smsNotifications ?? true,
+          notifyStatusChange: freshUser.notifyStatusChange ?? true,
+          notifyResolution: freshUser.notifyResolution ?? true,
+          notifyInfoRequest: freshUser.notifyInfoRequest ?? true,
+        };
+        setProfile(freshProfile);
+
+        if (typeof window !== "undefined") {
+          const cleanPhone = freshUser.mobileNumber.replace(/\D/g, "");
+          localStorage.setItem(`civic_profile_${cleanPhone}`, JSON.stringify(freshProfile));
+          localStorage.setItem(`civic_profile_${freshUser.mobileNumber}`, JSON.stringify(freshProfile));
         }
-      } catch (err) {
-        console.warn("Could not fetch remote profile:", err);
       }
-
-      loadData(sessionUser.mobileNumber, sessionUser.id);
-      setIsAuthChecking(false);
-    }, 0);
+    }).catch((err) => {
+      console.warn("Could not fetch remote profile:", err);
+    });
 
     // Live Real-Time Subscription
     const unsubscribe = subscribeToRealTime(() => {
@@ -279,7 +323,6 @@ export default function CitizenDashboardPage() {
 
     return () => {
       isSubscribed = false;
-      clearTimeout(timer);
       unsubscribe();
     };
   }, [loadData, router]);
@@ -312,6 +355,11 @@ export default function CitizenDashboardPage() {
           district: tempProfile.district,
           address: tempProfile.address,
           pincode: tempProfile.pincode,
+          websiteNotifications: tempProfile.websiteNotifications,
+          smsNotifications: tempProfile.smsNotifications,
+          notifyStatusChange: tempProfile.notifyStatusChange,
+          notifyResolution: tempProfile.notifyResolution,
+          notifyInfoRequest: tempProfile.notifyInfoRequest,
         });
         saveSession(activeToken, res.user);
         setCurrentUser(res.user);
@@ -322,6 +370,11 @@ export default function CitizenDashboardPage() {
           district: res.user.district || tempProfile.district,
           address: res.user.address || tempProfile.address,
           pincode: res.user.pincode || tempProfile.pincode,
+          websiteNotifications: res.user.websiteNotifications ?? tempProfile.websiteNotifications,
+          smsNotifications: res.user.smsNotifications ?? tempProfile.smsNotifications,
+          notifyStatusChange: res.user.notifyStatusChange ?? tempProfile.notifyStatusChange,
+          notifyResolution: res.user.notifyResolution ?? tempProfile.notifyResolution,
+          notifyInfoRequest: res.user.notifyInfoRequest ?? tempProfile.notifyInfoRequest,
         });
       }
     } catch (err) {
@@ -397,6 +450,11 @@ export default function CitizenDashboardPage() {
             : complaint
         )
       );
+      emitRealTimeEvent("FEEDBACK_SUBMITTED", {
+        incidentId: feedbackComplaint.id,
+        trackingNumber: feedbackComplaint.trackingNumber,
+        rating: feedbackRating,
+      });
     }
 
     setFeedbackComplaint(null);
@@ -440,7 +498,7 @@ export default function CitizenDashboardPage() {
         c.status === "SUBMITTED" ||
         c.status === "REOPENED"
     ).length;
-    const escalated = complaints.filter((c) => c.status === "ESCALATED" || c.priority === "VERY_HIGH").length;
+    const escalated = complaints.filter((c) => c.status === "ESCALATED").length;
     const feedbackCount = complaints.filter((c) => Boolean(c.feedback)).length;
     const needsFeedbackCount = complaints.filter(
       (c) => (c.status === "RESOLVED" || c.status === "CLOSED") && !c.feedback
@@ -457,7 +515,7 @@ export default function CitizenDashboardPage() {
       } else if (filterTab === "RESOLVED") {
         if (c.status !== "RESOLVED" && c.status !== "CLOSED") return false;
       } else if (filterTab === "ESCALATED") {
-        if (c.status !== "ESCALATED" && c.priority !== "VERY_HIGH") return false;
+        if (c.status !== "ESCALATED") return false;
       } else if (filterTab === "NEEDS_FEEDBACK") {
         if (c.status !== "RESOLVED" && c.status !== "CLOSED") return false;
         if (c.feedback) return false;
@@ -500,48 +558,49 @@ export default function CitizenDashboardPage() {
 
   if (isAuthChecking) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
-        <div className="text-center p-8 bg-white border border-[#E2E8F0] rounded-xl shadow-xs">
+      <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0B0F17] flex items-center justify-center transition-colors">
+        <div className="text-center p-8 bg-white dark:bg-[#111827] border border-[#E2E8F0] dark:border-[#1E293B] rounded-xl shadow-xs">
           <div className="w-8 h-8 border-2 border-[#0B4EA2] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <h2 className="text-sm font-bold text-[#0F172A]">Loading Citizen Dashboard...</h2>
-          <p className="text-xs text-[#64748B] mt-1">Verifying your secure mobile session.</p>
+          <h2 className="text-sm font-bold text-[#0F172A] dark:text-[#F8FAFC]">Loading Citizen Dashboard...</h2>
+          <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-1">Verifying your secure mobile session.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-between selection:bg-[#EAF2FF] selection:text-[#0B4EA2]">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0B0F17] flex flex-col justify-between text-[#0F172A] dark:text-[#F8FAFC] selection:bg-[#EAF2FF] dark:selection:bg-[#1E293B] transition-colors">
       {/* ==================== 1. TOP CIVIC HEADER ==================== */}
-      <header className="w-full bg-white border-b border-[#E2E8F0] py-3 px-4 sm:px-8 sticky top-0 z-30 shadow-2xs">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
-          <Link href={ROUTES.HOME} className="flex items-center gap-3 shrink-0">
-            <div className="w-9 h-9 rounded-lg bg-[#0B4EA2] flex items-center justify-center text-white shrink-0">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <span className="block text-sm sm:text-base font-bold text-[#0F172A] leading-tight">
-                {t("brandName")}
-              </span>
-              <span className="block text-[11px] text-[#64748B]">
-                {t("portalSubtitle")}
-              </span>
-            </div>
-          </Link>
+      <GlobalHeader
+        subtitle={t("portalSubtitle")}
+        actions={
+          <>
+            {currentUser && (() => {
+              const citizenName =
+                profile.fullName && profile.fullName !== "Citizen" && profile.fullName.trim()
+                  ? profile.fullName.trim()
+                  : currentUser.name && currentUser.name !== "Citizen" && currentUser.name.trim()
+                    ? currentUser.name.trim()
+                    : "Citizen";
+              return (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempProfile(profile);
+                    setIsProfileModalOpen(true);
+                  }}
+                  title="Click to view or edit citizen profile"
+                  className="flex items-center gap-2 bg-[#F8FAFC] dark:bg-[#161F30] hover:bg-[#F1F5F9] dark:hover:bg-[#1E293B] border border-[#CBD5E1] dark:border-[#2D3748] px-3 py-1.5 rounded-lg text-xs font-semibold text-[#0F172A] dark:text-[#F8FAFC] transition-colors cursor-pointer"
+                >
+                  <div className="w-5 h-5 rounded-full bg-[#0B4EA2] text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                    {citizenName.slice(0, 1).toUpperCase()}
+                  </div>
+                  <span>{citizenName}</span>
+                </button>
+              );
+            })()}
 
-          {/* Right Action Bar */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
-            <LanguageSwitcher />
-
-            {currentUser && (
-              <div className="flex items-center gap-2 bg-[#F8FAFC] border border-[#CBD5E1] px-3 py-1.5 rounded-lg text-xs font-semibold text-[#0F172A]">
-                <UserCheck className="w-3.5 h-3.5 text-[#0B4EA2]" />
-                <span>{currentUser.mobileNumber}</span>
-                <span className="hidden sm:inline text-[#15803D] bg-[#DCFCE7] px-1.5 py-0.2 rounded text-[10px] font-bold">
-                  {t("verified")}
-                </span>
-              </div>
-            )}
+            {currentUser && <NotificationBell />}
 
             <Link href={ROUTES.CITIZEN.NEW_COMPLAINT}>
               <Button variant="primary" size="sm" className="text-xs font-semibold" leftIcon={<Plus className="w-3.5 h-3.5" />}>
@@ -560,9 +619,9 @@ export default function CitizenDashboardPage() {
                 {t("logout")}
               </Button>
             )}
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {/* ==================== 2. MAIN DASHBOARD CONTENT ==================== */}
       <main className="max-w-6xl w-full mx-auto py-6 sm:py-8 px-4 sm:px-6 flex-1 space-y-6">
@@ -576,35 +635,46 @@ export default function CitizenDashboardPage() {
             <button
               type="button"
               onClick={() => setFeedbackNotice(null)}
-              className="text-[#15803D] hover:text-[#166534] font-bold"
+              className="text-[#15803D] hover:text-[#166534] p-1 rounded-md hover:bg-emerald-100 transition-colors"
+              aria-label="Close"
             >
-              ✕
+              <X className="w-4 h-4" />
             </button>
           </div>
         )}
         {complaintLoadError && (
-          <div role="alert" className="p-3.5 rounded-lg bg-[#FEF2F2] border border-[#FECACA] text-xs text-[#B91C1C] font-medium">
-            {complaintLoadError}
+          <div role="alert" className="p-4 rounded-xl bg-[#FEF2F2] border border-[#FECACA] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-[#B91C1C] shadow-xs">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-[#DC2626] shrink-0" />
+              <span className="font-semibold">{complaintLoadError}</span>
+            </div>
+            {(complaintLoadError.toLowerCase().includes("session") ||
+              complaintLoadError.toLowerCase().includes("token") ||
+              complaintLoadError.toLowerCase().includes("unauthorized") ||
+              complaintLoadError.toLowerCase().includes("sign in")) && (
+                <Link href="/auth/login" className="shrink-0">
+                  <Button size="sm" variant="outline" className="text-xs font-bold text-[#B91C1C] border-[#FECACA] bg-white hover:bg-red-50">
+                    Sign In Again
+                  </Button>
+                </Link>
+              )}
           </div>
         )}
 
         {/* ==================== CITIZEN INFORMATION CARD ==================== */}
-        <section className="bg-white rounded-xl border border-[#CBD5E1] shadow-2xs overflow-hidden">
-          <div className="p-5 sm:p-6 bg-gradient-to-r from-[#F8FAFC] to-white border-b border-[#E2E8F0] flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <section className="bg-white dark:bg-[#111827] rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-2xs overflow-hidden transition-colors">
+          <div className="p-5 sm:p-6 bg-[#F8FAFC] dark:bg-[#161F30] border-b border-[#E2E8F0] dark:border-[#1E293B] flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors">
             <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-full bg-[#EAF2FF] border border-[#BFDBFE] text-[#0B4EA2] flex items-center justify-center font-bold text-lg shrink-0">
+              <div className="w-14 h-14 rounded-full bg-[#EAF2FF] dark:bg-[#1E3A8A]/30 border border-[#BFDBFE] dark:border-[#1E40AF]/50 text-[#0B4EA2] dark:text-[#60A5FA] flex items-center justify-center font-bold text-lg shrink-0">
                 <User className="w-7 h-7 text-[#0B4EA2]" />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-lg sm:text-xl font-bold text-[#0F172A]">
-                    {profile.fullName || currentUser?.name || "Verified Citizen"}
+                  <h1 className="text-lg sm:text-xl font-bold text-[#0F172A] dark:text-[#F8FAFC]">
+                    {profile.fullName || currentUser?.name || "Citizen"}
                   </h1>
-                  <span className="text-[10px] font-bold uppercase tracking-wider bg-[#DCFCE7] text-[#15803D] px-2 py-0.5 rounded border border-[#BBF7D0] flex items-center gap-1">
-                    <Check className="w-3 h-3" /> {t("aadhaarVerified", "Aadhaar Verified")}
-                  </span>
                 </div>
-                <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-[#64748B]">
+                <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-[#64748B] dark:text-[#94A3B8]">
                   <span className="flex items-center gap-1">
                     <Phone className="w-3.5 h-3.5 text-[#0B4EA2]" />
                     <span>{currentUser?.mobileNumber}</span>
@@ -617,7 +687,7 @@ export default function CitizenDashboardPage() {
                   ) : null}
                   <span className="flex items-center gap-1">
                     <MapPin className="w-3.5 h-3.5 text-[#0B4EA2]" />
-                    <span>{profile.district || "Pune"}</span>
+                    <span>{profile.district || "Maharashtra"}</span>
                   </span>
                   {profile.address && (
                     <span className="flex items-center gap-1 text-[#475569]">
@@ -643,6 +713,7 @@ export default function CitizenDashboardPage() {
               >
                 {t("btnEditProfile", "Edit Citizen Profile")}
               </Button>
+
               <Link href={ROUTES.CITIZEN.NEW_COMPLAINT}>
                 <Button variant="primary" size="sm" className="text-xs font-bold" leftIcon={<Plus className="w-3.5 h-3.5" />}>
                   {t("btnLodgeGrievance", "Lodge Grievance")}
@@ -652,42 +723,42 @@ export default function CitizenDashboardPage() {
           </div>
 
           {/* Quick Stats Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[#E2E8F0] bg-white text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[#E2E8F0] dark:divide-[#1E293B] bg-white dark:bg-[#111827] text-center transition-colors">
             <div className="p-4">
               <span className="text-xs font-semibold text-[#64748B] uppercase tracking-wider block">
-                {t("statTotalLodged", "Total Lodged")}
+                {t("statTotalLodged", "Total Complaints")}
               </span>
-              <span className="text-2xl font-bold text-[#0F172A] font-mono mt-1 block">
+              <span className="text-2xl font-bold text-[#0F172A] dark:text-[#F8FAFC] font-mono mt-1 block">
                 {stats.total}
               </span>
-              <span className="text-[11px] text-[#64748B] mt-0.5 block">{t("statRecordedGrievances", "Recorded Grievances")}</span>
+              <span className="text-[11px] text-[#64748B] mt-0.5 block">{t("statRecordedGrievances", "All filed records")}</span>
             </div>
 
             <div className="p-4">
               <span className="text-xs font-semibold text-[#B45309] uppercase tracking-wider block">
-                {t("statUnderProcess", "Under Process")}
+                {t("statUnderProcess", "In Progress")}
               </span>
-              <span className="text-2xl font-bold text-[#D97706] font-mono mt-1 block">
+              <span className="text-2xl font-bold text-[#D97706] dark:text-[#FBBF24] font-mono mt-1 block">
                 {stats.inProgress}
               </span>
-              <span className="text-[11px] text-[#64748B] mt-0.5 block">{t("statFieldWork", "Field Work In Progress")}</span>
+              <span className="text-[11px] text-[#64748B] mt-0.5 block">{t("statFieldWork", "Active investigations")}</span>
             </div>
 
             <div className="p-4">
               <span className="text-xs font-semibold text-[#15803D] uppercase tracking-wider block">
-                {t("statRemediated", "Remediated & Verified")}
+                {t("statRemediated", "Resolved")}
               </span>
-              <span className="text-2xl font-bold text-[#16A34A] font-mono mt-1 block">
+              <span className="text-2xl font-bold text-[#16A34A] dark:text-[#4ADE80] font-mono mt-1 block">
                 {stats.resolved}
               </span>
-              <span className="text-[11px] text-[#64748B] mt-0.5 block">{t("statOfficialPhoto", "Official Photo Proof")}</span>
+              <span className="text-[11px] text-[#64748B] mt-0.5 block">{t("statOfficialPhoto", "Completed with proof")}</span>
             </div>
 
             <div className="p-4">
               <span className="text-xs font-semibold text-[#0B4EA2] uppercase tracking-wider block">
-                {t("statFeedbackProvided", "Feedback Provided")}
+                {t("statFeedbackProvided", "Feedback Given")}
               </span>
-              <span className="text-2xl font-bold text-[#0B4EA2] font-mono mt-1 block">
+              <span className="text-2xl font-bold text-[#0B4EA2] dark:text-[#60A5FA] font-mono mt-1 block">
                 {stats.feedbackCount}
               </span>
               <span className="text-[11px] text-[#64748B] mt-0.5 block">
@@ -700,15 +771,14 @@ export default function CitizenDashboardPage() {
         </section>
 
         {/* ==================== DASHBOARD VIEW NAVIGATION TABS ==================== */}
-        <div className="flex items-center gap-2 border-b border-[#E2E8F0] pb-2 text-xs font-bold">
+        <div className="flex items-center gap-2 border-b border-[#E2E8F0] dark:border-[#1E293B] pb-2 text-xs font-bold">
           <button
             type="button"
             onClick={() => setMainTab("COMPLAINTS")}
-            className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-              mainTab === "COMPLAINTS"
-                ? "bg-[#0B4EA2] text-white shadow-2xs"
-                : "bg-white text-[#475569] border border-[#CBD5E1] hover:bg-[#F8FAFC]"
-            }`}
+            className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${mainTab === "COMPLAINTS"
+              ? "bg-[#0B4EA2] text-white shadow-2xs"
+              : "bg-white dark:bg-[#161F30] text-[#475569] dark:text-[#CBD5E1] border border-[#CBD5E1] dark:border-[#2D3748] hover:bg-[#F8FAFC] dark:hover:bg-[#1E293B]"
+              }`}
           >
             <FileText className="w-3.5 h-3.5" />
             <span>{t("tabComplaints", "Complaints & Status")} ({complaints.length})</span>
@@ -717,11 +787,10 @@ export default function CitizenDashboardPage() {
           <button
             type="button"
             onClick={() => setMainTab("FEEDBACK")}
-            className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-              mainTab === "FEEDBACK"
-                ? "bg-[#0B4EA2] text-white shadow-2xs"
-                : "bg-white text-[#475569] border border-[#CBD5E1] hover:bg-[#F8FAFC]"
-            }`}
+            className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${mainTab === "FEEDBACK"
+              ? "bg-[#0B4EA2] text-white shadow-2xs"
+              : "bg-white dark:bg-[#161F30] text-[#475569] dark:text-[#CBD5E1] border border-[#CBD5E1] dark:border-[#2D3748] hover:bg-[#F8FAFC] dark:hover:bg-[#1E293B]"
+              }`}
           >
             <Star className="w-3.5 h-3.5" />
             <span>{t("tabFeedback", "My Feedback & Ratings")} ({stats.feedbackCount})</span>
@@ -733,14 +802,13 @@ export default function CitizenDashboardPage() {
           <button
             type="button"
             onClick={() => setMainTab("PROFILE")}
-            className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-              mainTab === "PROFILE"
-                ? "bg-[#0B4EA2] text-white shadow-2xs"
-                : "bg-white text-[#475569] border border-[#CBD5E1] hover:bg-[#F8FAFC]"
-            }`}
+            className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${mainTab === "PROFILE"
+              ? "bg-[#0B4EA2] text-white shadow-2xs"
+              : "bg-white dark:bg-[#161F30] text-[#475569] dark:text-[#CBD5E1] border border-[#CBD5E1] dark:border-[#2D3748] hover:bg-[#F8FAFC] dark:hover:bg-[#1E293B]"
+              }`}
           >
             <User className="w-3.5 h-3.5" />
-            <span>{t("tabProfile", "Citizen Profile & Jurisdiction")}</span>
+            <span>{t("tabProfile", "Citizen Profile")}</span>
           </button>
         </div>
 
@@ -748,61 +816,56 @@ export default function CitizenDashboardPage() {
         {mainTab === "COMPLAINTS" && (
           <div className="space-y-4">
             {/* Filter Toolbar */}
-            <div className="bg-white p-3.5 rounded-xl border border-[#CBD5E1] shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="bg-white dark:bg-[#111827] p-3.5 rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3 transition-colors">
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-xs">
                 <button
                   type="button"
                   onClick={() => setFilterTab("ALL")}
-                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${
-                    filterTab === "ALL"
-                      ? "bg-[#0B4EA2] text-white"
-                      : "bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]"
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${filterTab === "ALL"
+                    ? "bg-[#0B4EA2] text-white"
+                    : "bg-[#F1F5F9] dark:bg-[#161F30] text-[#475569] dark:text-[#CBD5E1] hover:bg-[#E2E8F0] dark:hover:bg-[#1E293B]"
+                    }`}
                 >
                   {t("filterAll", "All")} ({complaints.length})
                 </button>
                 <button
                   type="button"
                   onClick={() => setFilterTab("ACTIVE")}
-                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${
-                    filterTab === "ACTIVE"
-                      ? "bg-[#0B4EA2] text-white"
-                      : "bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]"
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${filterTab === "ACTIVE"
+                    ? "bg-[#0B4EA2] text-white"
+                    : "bg-[#F1F5F9] dark:bg-[#161F30] text-[#475569] dark:text-[#CBD5E1] hover:bg-[#E2E8F0] dark:hover:bg-[#1E293B]"
+                    }`}
                 >
                   {t("statUnderProcess", "Under Process")} ({stats.inProgress})
                 </button>
                 <button
                   type="button"
                   onClick={() => setFilterTab("RESOLVED")}
-                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${
-                    filterTab === "RESOLVED"
-                      ? "bg-[#0B4EA2] text-white"
-                      : "bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]"
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${filterTab === "RESOLVED"
+                    ? "bg-[#0B4EA2] text-white"
+                    : "bg-[#F1F5F9] dark:bg-[#161F30] text-[#475569] dark:text-[#CBD5E1] hover:bg-[#E2E8F0] dark:hover:bg-[#1E293B]"
+                    }`}
                 >
                   {t("statusResolved", "Resolved")} ({stats.resolved})
                 </button>
                 <button
                   type="button"
                   onClick={() => setFilterTab("ESCALATED")}
-                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${
-                    filterTab === "ESCALATED"
-                      ? "bg-[#0B4EA2] text-white"
-                      : "bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]"
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${filterTab === "ESCALATED"
+                    ? "bg-[#0B4EA2] text-white"
+                    : "bg-[#F1F5F9] dark:bg-[#161F30] text-[#475569] dark:text-[#CBD5E1] hover:bg-[#E2E8F0] dark:hover:bg-[#1E293B]"
+                    }`}
                 >
-                  {t("filterCritical", "Critical Priority")} ({stats.escalated})
+                  {t("filterEscalated", "Escalated")} ({stats.escalated})
                 </button>
                 {stats.needsFeedbackCount > 0 && (
                   <button
                     type="button"
                     onClick={() => setFilterTab("NEEDS_FEEDBACK")}
-                    className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 flex items-center gap-1 ${
-                      filterTab === "NEEDS_FEEDBACK"
-                        ? "bg-[#D97706] text-white"
-                        : "bg-[#FEF3C7] text-[#92400E] hover:bg-[#FDE68A]"
-                    }`}
+                    className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 flex items-center gap-1 ${filterTab === "NEEDS_FEEDBACK"
+                      ? "bg-[#D97706] text-white"
+                      : "bg-[#FEF3C7] text-[#92400E] hover:bg-[#FDE68A]"
+                      }`}
                   >
                     <Star className="w-3 h-3" />
                     <span>Rate Resolution ({stats.needsFeedbackCount})</span>
@@ -838,7 +901,7 @@ export default function CitizenDashboardPage() {
                       {/* Card Header: Tracking Number, Badges & Date */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-[#F1F5F9] pb-3">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-xs font-bold text-[#0B4EA2] bg-[#EAF2FF] border border-[#BFDBFE] px-2.5 py-1 rounded-md">
+                          <span className="font-mono text-xs font-bold text-[#0B4EA2] dark:text-[#60A5FA] bg-[#EAF2FF] dark:bg-[#1E3A8A]/30 border border-[#BFDBFE] dark:border-[#1E40AF]/50 px-2.5 py-1 rounded-md">
                             {item.trackingNumber}
                           </span>
                           <button
@@ -873,11 +936,10 @@ export default function CitizenDashboardPage() {
                           {/* Step 1: Lodged */}
                           <div className="space-y-1">
                             <div
-                              className={`w-6 h-6 rounded-full mx-auto flex items-center justify-center text-[10px] font-bold ${
-                                currentStep >= 1
-                                  ? "bg-[#0B4EA2] text-white"
-                                  : "bg-[#E2E8F0] text-[#64748B]"
-                              }`}
+                              className={`w-6 h-6 rounded-full mx-auto flex items-center justify-center text-[10px] font-bold ${currentStep >= 1
+                                ? "bg-[#0B4EA2] text-white"
+                                : "bg-[#E2E8F0] text-[#64748B]"
+                                }`}
                             >
                               ✓
                             </div>
@@ -892,18 +954,16 @@ export default function CitizenDashboardPage() {
                           {/* Step 2: Assigned */}
                           <div className="space-y-1">
                             <div
-                              className={`w-6 h-6 rounded-full mx-auto flex items-center justify-center text-[10px] font-bold ${
-                                currentStep >= 2
-                                  ? "bg-[#0B4EA2] text-white"
-                                  : "bg-[#E2E8F0] text-[#64748B]"
-                              }`}
+                              className={`w-6 h-6 rounded-full mx-auto flex items-center justify-center text-[10px] font-bold ${currentStep >= 2
+                                ? "bg-[#0B4EA2] text-white"
+                                : "bg-[#E2E8F0] text-[#64748B]"
+                                }`}
                             >
                               {currentStep >= 2 ? "✓" : "2"}
                             </div>
                             <span
-                              className={`block text-[11px] font-bold ${
-                                currentStep >= 2 ? "text-[#0F172A]" : "text-[#94A3B8]"
-                              }`}
+                              className={`block text-[11px] font-bold ${currentStep >= 2 ? "text-[#0F172A]" : "text-[#94A3B8]"
+                                }`}
                             >
                               2. Assigned
                             </span>
@@ -915,20 +975,18 @@ export default function CitizenDashboardPage() {
                           {/* Step 3: Field Work */}
                           <div className="space-y-1">
                             <div
-                              className={`w-6 h-6 rounded-full mx-auto flex items-center justify-center text-[10px] font-bold ${
-                                currentStep >= 3
-                                  ? isResolved
-                                    ? "bg-[#0B4EA2] text-white"
-                                    : "bg-[#D97706] text-white"
-                                  : "bg-[#E2E8F0] text-[#64748B]"
-                              }`}
+                              className={`w-6 h-6 rounded-full mx-auto flex items-center justify-center text-[10px] font-bold ${currentStep >= 3
+                                ? isResolved
+                                  ? "bg-[#0B4EA2] text-white"
+                                  : "bg-[#D97706] text-white"
+                                : "bg-[#E2E8F0] text-[#64748B]"
+                                }`}
                             >
                               {currentStep > 3 ? "✓" : "3"}
                             </div>
                             <span
-                              className={`block text-[11px] font-bold ${
-                                currentStep >= 3 ? "text-[#0F172A]" : "text-[#94A3B8]"
-                              }`}
+                              className={`block text-[11px] font-bold ${currentStep >= 3 ? "text-[#0F172A]" : "text-[#94A3B8]"
+                                }`}
                             >
                               3. In Action
                             </span>
@@ -940,23 +998,21 @@ export default function CitizenDashboardPage() {
                           {/* Step 4: Resolved */}
                           <div className="space-y-1">
                             <div
-                              className={`w-6 h-6 rounded-full mx-auto flex items-center justify-center text-[10px] font-bold ${
-                                currentStep === 4
-                                  ? "bg-[#16A34A] text-white"
-                                  : "bg-[#E2E8F0] text-[#64748B]"
-                              }`}
+                              className={`w-6 h-6 rounded-full mx-auto flex items-center justify-center text-[10px] font-bold ${currentStep === 4
+                                ? "bg-[#16A34A] text-white"
+                                : "bg-[#E2E8F0] text-[#64748B]"
+                                }`}
                             >
                               {currentStep === 4 ? "✓" : "4"}
                             </div>
                             <span
-                              className={`block text-[11px] font-bold ${
-                                currentStep === 4 ? "text-[#16A34A]" : "text-[#94A3B8]"
-                              }`}
+                              className={`block text-[11px] font-bold ${currentStep === 4 ? "text-[#16A34A]" : "text-[#94A3B8]"
+                                }`}
                             >
                               4. Resolved
                             </span>
                             <span className="hidden sm:block text-[10px] text-[#64748B]">
-                              Verified Remediation
+                              Issue Closed
                             </span>
                           </div>
                         </div>
@@ -965,14 +1021,14 @@ export default function CitizenDashboardPage() {
                       {/* Content Body */}
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="md:col-span-3 space-y-2">
-                          <h2 className="font-bold text-sm sm:text-base text-[#0F172A] leading-snug">
+                          <h2 className="font-bold text-sm sm:text-base text-[#0F172A] dark:text-[#F8FAFC] leading-snug">
                             {item.title}
                           </h2>
-                          <p className="text-xs text-[#475569] leading-relaxed">
+                          <p className="text-xs text-[#475569] dark:text-[#CBD5E1] leading-relaxed">
                             {item.description}
                           </p>
 
-                          <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-[#64748B]">
+                          <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-[#64748B] dark:text-[#94A3B8]">
                             <span className="flex items-center gap-1">
                               <MapPin className="w-3.5 h-3.5 text-[#0B4EA2]" />
                               <span>{item.location}</span>
@@ -985,7 +1041,7 @@ export default function CitizenDashboardPage() {
                             <span>•</span>
                             <span className="font-medium text-[#0F172A]">
                               {item.assignedOfficer
-                                ? `Officer: 👤 ${item.assignedOfficer}`
+                                ? `Officer: ${item.assignedOfficer}`
                                 : "Awaiting Ward Allocation"}
                             </span>
                           </div>
@@ -1022,7 +1078,7 @@ export default function CitizenDashboardPage() {
                               <span>Remediation Sign-off by {item.resolutionEvidence.uploadedBy}</span>
                             </div>
                             <span className="text-[10px] bg-white px-2 py-0.5 rounded border border-[#BBF7D0] text-[#15803D] font-bold">
-                              Verified
+                              Closed
                             </span>
                           </div>
                           <p className="text-xs text-[#15803D]/90">
@@ -1048,9 +1104,8 @@ export default function CitizenDashboardPage() {
                               {[...Array(5)].map((_, i) => (
                                 <Star
                                   key={i}
-                                  className={`w-3.5 h-3.5 ${
-                                    i < item.feedback!.rating ? "fill-[#D97706]" : "text-[#CBD5E1]"
-                                  }`}
+                                  className={`w-3.5 h-3.5 ${i < item.feedback!.rating ? "fill-[#D97706]" : "text-[#CBD5E1]"
+                                    }`}
                                 />
                               ))}
                             </div>
@@ -1112,6 +1167,7 @@ export default function CitizenDashboardPage() {
                     : "No grievances found under this filter."}
                 </p>
                 <div className="pt-2">
+
                   <Link href={ROUTES.CITIZEN.NEW_COMPLAINT}>
                     <Button variant="primary" size="sm" className="text-xs font-bold" leftIcon={<Plus className="w-3.5 h-3.5" />}>
                       Lodge New Complaint
@@ -1149,11 +1205,11 @@ export default function CitizenDashboardPage() {
                     <span className="text-2xl font-bold text-[#D97706]">
                       {stats.feedbackCount > 0
                         ? (
-                            complaints
-                              .filter((c) => Boolean(c.feedback))
-                              .reduce((acc, c) => acc + (c.feedback?.rating || 5), 0) /
-                            stats.feedbackCount
-                          ).toFixed(1)
+                          complaints
+                            .filter((c) => Boolean(c.feedback))
+                            .reduce((acc, c) => acc + (c.feedback?.rating || 5), 0) /
+                          stats.feedbackCount
+                        ).toFixed(1)
                         : "5.0"}
                     </span>
                     <span className="text-xs text-[#64748B]">/ 5.0 Stars</span>
@@ -1199,9 +1255,8 @@ export default function CitizenDashboardPage() {
                               {[...Array(5)].map((_, i) => (
                                 <Star
                                   key={i}
-                                  className={`w-4 h-4 ${
-                                    i < item.feedback!.rating ? "fill-[#D97706]" : "text-[#CBD5E1]"
-                                  }`}
+                                  className={`w-4 h-4 ${i < item.feedback!.rating ? "fill-[#D97706]" : "text-[#CBD5E1]"
+                                    }`}
                                 />
                               ))}
                             </div>
@@ -1272,11 +1327,11 @@ export default function CitizenDashboardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div className="p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
                   <span className="text-[#64748B] block font-medium">Full Name</span>
-                  <span className="font-bold text-[#0F172A] mt-0.5 block">{profile.fullName || currentUser?.name || "Verified Citizen"}</span>
+                  <span className="font-bold text-[#0F172A] mt-0.5 block">{profile.fullName || currentUser?.name || "Citizen"}</span>
                 </div>
 
                 <div className="p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
-                  <span className="text-[#64748B] block font-medium">Verified Phone</span>
+                  <span className="text-[#64748B] block font-medium">Phone Number</span>
                   <span className="font-bold text-[#0F172A] mt-0.5 block">{currentUser?.mobileNumber}</span>
                 </div>
 
@@ -1287,11 +1342,11 @@ export default function CitizenDashboardPage() {
 
                 <div className="p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
                   <span className="text-[#64748B] block font-medium">District / Division</span>
-                  <span className="font-bold text-[#0F172A] mt-0.5 block">{profile.district || "Pune"}</span>
+                  <span className="font-bold text-[#0F172A] mt-0.5 block">{profile.district || "Maharashtra"}</span>
                 </div>
 
                 <div className="sm:col-span-2 p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
-                  <span className="text-[#64748B] block font-medium">Residential Street Address (Manual)</span>
+                  <span className="text-[#64748B] block font-medium">Residential Street Address</span>
                   <span className="font-bold text-[#0F172A] mt-0.5 block">{profile.address || "Not provided"}</span>
                 </div>
 
@@ -1303,9 +1358,54 @@ export default function CitizenDashboardPage() {
                 </div>
               </div>
 
+              {/* Citizen Notification Preferences Summary */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-[#F8FAFC] to-[#F1F5F9] dark:from-[#161F30] dark:to-[#111827] border border-[#E2E8F0] dark:border-[#1E293B] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-[#0B4EA2] dark:text-[#60A5FA]" />
+                    <span className="text-xs font-bold text-[#0F172A] dark:text-[#F8FAFC]">
+                      Real-Time Notification Preferences
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold">
+                    Socket.IO Active
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#2D3748]">
+                    <span className="text-[#475569] dark:text-[#CBD5E1]">In-App Alerts</span>
+                    <span className={`font-semibold ${profile.websiteNotifications !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                      {profile.websiteNotifications !== false ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#2D3748]">
+                    <span className="text-[#475569] dark:text-[#CBD5E1]">SMS Gateway</span>
+                    <span className={`font-semibold ${profile.smsNotifications !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                      {profile.smsNotifications !== false ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#2D3748]">
+                    <span className="text-[#475569] dark:text-[#CBD5E1]">Status Updates</span>
+                    <span className={`font-semibold ${profile.notifyStatusChange !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                      {profile.notifyStatusChange !== false ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#2D3748]">
+                    <span className="text-[#475569] dark:text-[#CBD5E1]">Resolution Alerts</span>
+                    <span className={`font-semibold ${profile.notifyResolution !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                      {profile.notifyResolution !== false ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               <div className="pt-2 border-t border-[#E2E8F0] text-xs text-[#64748B] flex items-center justify-between">
-                <span>Account Status: <strong>Aadhaar OTP Verified</strong></span>
-                <span>Active Since: <strong>Registered Citizen</strong></span>
+                <span>Account Status: <strong>Active</strong></span>
+                <span>Status: <strong>Registered</strong></span>
               </div>
             </div>
 
@@ -1364,7 +1464,7 @@ export default function CitizenDashboardPage() {
               </div>
 
               <div>
-                <label className="font-semibold text-[#0F172A] block mb-1">Email Address (Optional)</label>
+                <label className="font-semibold text-[#0F172A] block mb-1">Email Address</label>
                 <input
                   type="email"
                   value={tempProfile.email}
@@ -1396,7 +1496,7 @@ export default function CitizenDashboardPage() {
 
               <div>
                 <label className="font-semibold text-[#0F172A] block mb-1">
-                  Residential Address (Manual Entry)
+                  Residential Address
                 </label>
                 <textarea
                   rows={2}
@@ -1410,7 +1510,7 @@ export default function CitizenDashboardPage() {
 
               <div>
                 <label className="font-semibold text-[#0F172A] block mb-1">
-                  Postal Pincode (Manual Entry)
+                  Postal Pincode
                 </label>
                 <input
                   type="text"
@@ -1426,6 +1526,75 @@ export default function CitizenDashboardPage() {
                   placeholder="e.g. 411001"
                   className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
                 />
+              </div>
+
+              {/* Notification Preferences Toggles */}
+              <div className="pt-2 border-t border-[#E2E8F0] space-y-2">
+                <span className="font-bold text-[#0F172A] block text-xs">
+                  Notification & SMS Preferences
+                </span>
+
+                <div className="space-y-1.5 text-xs text-[#334155]">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={tempProfile.websiteNotifications !== false}
+                      onChange={(e) =>
+                        setTempProfile({ ...tempProfile, websiteNotifications: e.target.checked })
+                      }
+                      className="rounded border-[#CBD5E1] text-[#0B4EA2] focus:ring-[#0B4EA2]"
+                    />
+                    <span>Website Real-Time Notifications (Socket.IO)</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={tempProfile.smsNotifications !== false}
+                      onChange={(e) =>
+                        setTempProfile({ ...tempProfile, smsNotifications: e.target.checked })
+                      }
+                      className="rounded border-[#CBD5E1] text-[#0B4EA2] focus:ring-[#0B4EA2]"
+                    />
+                    <span>SMS Alerts to Registered Mobile ({currentUser?.mobileNumber})</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={tempProfile.notifyStatusChange !== false}
+                      onChange={(e) =>
+                        setTempProfile({ ...tempProfile, notifyStatusChange: e.target.checked })
+                      }
+                      className="rounded border-[#CBD5E1] text-[#0B4EA2] focus:ring-[#0B4EA2]"
+                    />
+                    <span>Grievance Progress & Status Changes</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={tempProfile.notifyResolution !== false}
+                      onChange={(e) =>
+                        setTempProfile({ ...tempProfile, notifyResolution: e.target.checked })
+                      }
+                      className="rounded border-[#CBD5E1] text-[#0B4EA2] focus:ring-[#0B4EA2]"
+                    />
+                    <span>Resolution & Closure Confirmation Alerts</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={tempProfile.notifyInfoRequest !== false}
+                      onChange={(e) =>
+                        setTempProfile({ ...tempProfile, notifyInfoRequest: e.target.checked })
+                      }
+                      className="rounded border-[#CBD5E1] text-[#0B4EA2] focus:ring-[#0B4EA2]"
+                    />
+                    <span>Action Required / Additional Information Requests</span>
+                  </label>
+                </div>
               </div>
 
               <div className="pt-3 border-t border-[#E2E8F0] flex items-center justify-between gap-2">
@@ -1478,7 +1647,7 @@ export default function CitizenDashboardPage() {
             </div>
 
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
-              ⚠️ This action is irreversible. You will stay signed out and would need to verify via OTP to register as a new citizen.
+              This action is irreversible. You will stay signed out and would need to verify via OTP to register as a new citizen.
             </div>
 
             <div className="flex items-center gap-2 pt-2">
@@ -1547,11 +1716,10 @@ export default function CitizenDashboardPage() {
                       className="p-1 hover:scale-110 transition-transform"
                     >
                       <Star
-                        className={`w-7 h-7 ${
-                          star <= feedbackRating
-                            ? "fill-[#D97706] text-[#D97706]"
-                            : "text-[#CBD5E1]"
-                        }`}
+                        className={`w-7 h-7 ${star <= feedbackRating
+                          ? "fill-[#D97706] text-[#D97706]"
+                          : "text-[#CBD5E1]"
+                          }`}
                       />
                     </button>
                   ))}
@@ -1560,12 +1728,12 @@ export default function CitizenDashboardPage() {
                   {feedbackRating === 5
                     ? "⭐⭐⭐⭐⭐ Outstanding / Fully Remediated"
                     : feedbackRating === 4
-                    ? "⭐⭐⭐⭐ Very Good / Satisfied"
-                    : feedbackRating === 3
-                    ? "⭐⭐⭐ Acceptable / Average"
-                    : feedbackRating === 2
-                    ? "⭐⭐ Needs Improvement"
-                    : "⭐ Poor / Unsatisfied"}
+                      ? "⭐⭐⭐⭐ Very Good / Satisfied"
+                      : feedbackRating === 3
+                        ? "⭐⭐⭐ Acceptable / Average"
+                        : feedbackRating === 2
+                          ? "⭐⭐ Needs Improvement"
+                          : "⭐ Poor / Unsatisfied"}
                 </span>
               </div>
 
@@ -1585,11 +1753,10 @@ export default function CitizenDashboardPage() {
                       key={item.id}
                       type="button"
                       onClick={() => setFeedbackSatisfaction(item.id as "VERY_SATISFIED")}
-                      className={`p-2 rounded-lg font-semibold border text-center transition-colors ${
-                        feedbackSatisfaction === item.id
-                          ? "bg-[#0B4EA2] text-white border-[#0B4EA2]"
-                          : "bg-white text-[#475569] border-[#CBD5E1] hover:bg-[#F8FAFC]"
-                      }`}
+                      className={`p-2 rounded-lg font-semibold border text-center transition-colors ${feedbackSatisfaction === item.id
+                        ? "bg-[#0B4EA2] text-white border-[#0B4EA2]"
+                        : "bg-white text-[#475569] border-[#CBD5E1] hover:bg-[#F8FAFC]"
+                        }`}
                     >
                       {item.label}
                     </button>

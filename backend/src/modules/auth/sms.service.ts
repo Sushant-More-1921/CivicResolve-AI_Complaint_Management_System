@@ -8,10 +8,10 @@ export interface SmsSendResult {
 
 /**
  * SMS SERVICE STATUS:
- * Set to `true` to pause physical SMS dispatch via TextBee and output OTP to the terminal only.
- * Set to `false` when ready to resume physical SMS delivery.
+ * Set to `false` so physical SMS delivery via TextBee is ACTIVE.
+ * Both live SMS and terminal console outputs are always active.
  */
-export const SMS_SERVICE_PAUSED = true;
+export const SMS_SERVICE_PAUSED = false;
 
 export class SmsService {
   private cachedTextBeeDeviceId: string | null = null;
@@ -64,8 +64,7 @@ export class SmsService {
   }
 
   /**
-   * Dispatches OTP SMS code to the given Indian mobile number.
-   * Currently PAUSED per user instruction: logs OTP directly to terminal console.
+   * Dispatches OTP SMS code via TextBee SMS Gateway and logs OTP prominently to the terminal console.
    */
   public async sendOtpSms(phoneNumber: string, otpCode: string): Promise<SmsSendResult> {
     const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10);
@@ -73,11 +72,11 @@ export class SmsService {
     // High-visibility OTP in the developer terminal console
     console.log(`
 ========================================================================
-🔑 [TERMINAL OTP DISPATCH - SMS SERVICE PAUSED]
+🔑 [CIVICRESOLVE OTP DISPATCH - SMS & TERMINAL ACTIVE]
 📱 Target Mobile : +91 ${cleanPhone}
 🔢 6-Digit OTP   : ${otpCode}
 ⏳ Expiry        : 5 minutes
-🛑 SMS Gateway   : PAUSED (Terminal OTP Active)
+📡 SMS Gateway   : TextBee Active (+ Terminal Console Output)
 ========================================================================`);
 
     // When paused, return terminal response immediately without calling external SMS provider

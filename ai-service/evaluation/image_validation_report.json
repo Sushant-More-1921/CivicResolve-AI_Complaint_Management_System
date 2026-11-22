@@ -1,0 +1,135 @@
+{
+  "evaluated_at_utc": "2026-11-12T17:32:19Z",
+  "model_version": "civic-imgval-clip-v1.0.0",
+  "dataset_split": "real_held_out_test_only (synthetic_samples excluded)",
+  "total_held_out_images": 159,
+  "test_class_distribution": {
+    "garbage": 32,
+    "drainage": 6,
+    "water_pollution": 40,
+    "road_damage": 60,
+    "sanitation": 5,
+    "unrelated": 14,
+    "low_quality": 2
+  },
+  "classification_metrics": {
+    "evaluated_samples": 157,
+    "accuracy": 0.9809,
+    "macro_precision": 0.9443,
+    "macro_recall": 0.9801,
+    "macro_f1": 0.9598,
+    "weighted_precision": 0.983,
+    "weighted_recall": 0.9809,
+    "weighted_f1": 0.9813,
+    "labels": [
+      "garbage",
+      "drainage",
+      "water_pollution",
+      "road_damage",
+      "sanitation",
+      "unrelated"
+    ],
+    "confusion_matrix": [
+      [
+        31,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        6,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        40,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        1,
+        0,
+        59,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        5,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        1,
+        13
+      ]
+    ],
+    "per_class": {
+      "garbage": {
+        "precision": 1.0,
+        "recall": 0.9688,
+        "f1": 0.9841,
+        "support": 32
+      },
+      "drainage": {
+        "precision": 0.8571,
+        "recall": 1.0,
+        "f1": 0.9231,
+        "support": 6
+      },
+      "water_pollution": {
+        "precision": 0.9756,
+        "recall": 1.0,
+        "f1": 0.9877,
+        "support": 40
+      },
+      "road_damage": {
+        "precision": 1.0,
+        "recall": 0.9833,
+        "f1": 0.9916,
+        "support": 60
+      },
+      "sanitation": {
+        "precision": 0.8333,
+        "recall": 1.0,
+        "f1": 0.9091,
+        "support": 5
+      },
+      "unrelated": {
+        "precision": 1.0,
+        "recall": 0.9286,
+        "f1": 0.963,
+        "support": 14
+      }
+    }
+  },
+  "validation_gate_metrics": {
+    "valid_civic_samples": 143,
+    "valid_civic_accepted_or_review": 143,
+    "false_rejection_rate_valid": 0.0,
+    "unrelated_samples": 14,
+    "unrelated_blocked_or_review": 14,
+    "false_acceptance_rate_unrelated": 0.0,
+    "off_category_mismatch_probes": 143,
+    "off_category_blocked_or_review_rate": 1.0
+  },
+  "latency_ms": {
+    "mean": 237.23,
+    "p95": 620.0
+  }
+}

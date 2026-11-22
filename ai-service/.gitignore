@@ -2,3 +2,8 @@ venv/
 __pycache__/
 *.pyc
 .env
+datasets/
+models/image_validator/*.pt
+models/image_validator/*.pth
+models/image_validator/*.joblib
+models/clip_backbone/

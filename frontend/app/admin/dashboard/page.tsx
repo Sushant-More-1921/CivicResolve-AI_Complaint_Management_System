@@ -13,6 +13,7 @@ import {
   Settings,
   Sliders,
   Bell,
+  Building2,
   Search,
   ArrowUpDown,
   LogOut,
@@ -24,34 +25,102 @@ import {
   AlertTriangle,
   RotateCcw,
   FolderTree,
-  Navigation,
   MapPin,
   CheckCircle2,
   Briefcase,
+  TrendingUp,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/common/status-badge";
 import { PriorityBadge } from "@/components/common/priority-badge";
 import { ComplaintsMapView } from "@/components/map/complaints-map-view";
-import { ComplaintsAnalyticsView } from "@/components/analytics/complaints-analytics-view";
-import { OfficersManagementView } from "@/components/officers/officers-management-view";
-import { ComplaintsReportsView } from "@/components/reports/complaints-reports-view";
-import { HierarchyManagementView } from "@/components/admin/hierarchy-management-view";
-import { AutoRoutingVisualizer } from "@/components/admin/auto-routing-visualizer";
+import dynamic from "next/dynamic";
 import { AssignedWorkModal } from "@/components/admin/assigned-work-modal";
 import { IncidentDetailsModal } from "@/components/admin/incident-details-modal";
-import { ClusteringLiveToolbar } from "@/components/admin/clustering-live-toolbar";
-import { SuperAdminView } from "@/components/admin/super-admin-view";
+
+const DepartmentAdminView = dynamic(
+  () => import("@/components/admin/department-admin-view").then((m) => m.DepartmentAdminView),
+  { ssr: false }
+);
+
+const OfficerWorkspaceView = dynamic(
+  () => import("@/components/officer/officer-workspace-view").then((m) => m.OfficerWorkspaceView),
+  { ssr: false }
+);
+
+const SuperAdminView = dynamic(
+  () => import("@/components/admin/super-admin-view").then((m) => m.SuperAdminView),
+  {
+    loading: () => (
+      <div className="p-8 text-center bg-white rounded-xl border border-[#CBD5E1] text-xs text-[#64748B] flex items-center justify-center gap-2">
+        <div className="w-5 h-5 border-2 border-[#0B4EA2] border-t-transparent rounded-full animate-spin" />
+        <span>Loading Super Admin Console...</span>
+      </div>
+    ),
+  }
+);
+
+const ComplaintsAnalyticsView = dynamic(
+  () => import("@/components/analytics/complaints-analytics-view").then((m) => m.ComplaintsAnalyticsView),
+  {
+    loading: () => (
+      <div className="p-8 text-center bg-white rounded-xl border border-[#CBD5E1] text-xs text-[#64748B] flex items-center justify-center gap-2">
+        <div className="w-5 h-5 border-2 border-[#0B4EA2] border-t-transparent rounded-full animate-spin" />
+        <span>Loading Analytics...</span>
+      </div>
+    ),
+  }
+);
+
+const ComplaintsReportsView = dynamic(
+  () => import("@/components/reports/complaints-reports-view").then((m) => m.ComplaintsReportsView),
+  {
+    loading: () => (
+      <div className="p-8 text-center bg-white rounded-xl border border-[#CBD5E1] text-xs text-[#64748B] flex items-center justify-center gap-2">
+        <div className="w-5 h-5 border-2 border-[#0B4EA2] border-t-transparent rounded-full animate-spin" />
+        <span>Loading Reports...</span>
+      </div>
+    ),
+  }
+);
+
+const OfficersManagementView = dynamic(
+  () => import("@/components/officers/officers-management-view").then((m) => m.OfficersManagementView),
+  {
+    loading: () => (
+      <div className="p-8 text-center bg-white rounded-xl border border-[#CBD5E1] text-xs text-[#64748B] flex items-center justify-center gap-2">
+        <div className="w-5 h-5 border-2 border-[#0B4EA2] border-t-transparent rounded-full animate-spin" />
+        <span>Loading Field Officers Directory...</span>
+      </div>
+    ),
+  }
+);
+
+const HierarchyManagementView = dynamic(
+  () => import("@/components/admin/hierarchy-management-view").then((m) => m.HierarchyManagementView),
+  {
+    loading: () => (
+      <div className="p-8 text-center bg-white rounded-xl border border-[#CBD5E1] text-xs text-[#64748B] flex items-center justify-center gap-2">
+        <div className="w-5 h-5 border-2 border-[#0B4EA2] border-t-transparent rounded-full animate-spin" />
+        <span>Loading Hierarchy...</span>
+      </div>
+    ),
+  }
+);
 
 import {
   getStoredIncidents,
   queryIncidents,
   computeDashboardStats,
   assignOfficerToIncident,
+  overrideIncidentPriority,
   updateIncidentStatus,
   incidentToComplaint,
+  fetchAndSyncDatabaseComplaints,
 } from "@/lib/db/incidents-db";
 import { subscribeToRealTime, emitRealTimeEvent } from "@/lib/realtime/events";
+import { getSocket, onNotificationReceived } from "@/lib/realtime/socket-client";
 import { MOCK_OFFICERS } from "@/lib/api/officers";
 import {
   INITIAL_DIVISIONS,
@@ -59,7 +128,10 @@ import {
   INITIAL_DEPARTMENTS,
 } from "@/lib/api/hierarchy";
 import { getSessionUser, getSessionToken, clearSession } from "@/lib/auth/session";
-import { updateComplaintStatusApi, assignComplaintOfficerApi } from "@/lib/api/complaints";
+import { fetchOfficersApi, fetchDepartmentsApi, OfficerItem, DepartmentItem } from "@/lib/api/admin";
+import { reassignComplaintDepartmentApi } from "@/lib/api/complaints";
+import { updateComplaintStatusApi, assignComplaintOfficerApi,
+  overrideComplaintPriorityApi, getAdminStatsApi } from "@/lib/api/complaints";
 import { ComplaintPriority, ComplaintStatus } from "@/types/complaint";
 import { MasterIncident, DashboardStats } from "@/types/incident";
 import { Officer } from "@/types/officer";
@@ -69,19 +141,46 @@ import Link from "next/link";
 import ROUTES from "@/config/routes";
 import { LanguageSwitcher } from "@/components/common/language-switcher";
 import { useLanguage } from "@/context/language-context";
+import { CivicResolveLogo } from "@/components/common/civic-logo";
+import { ThemeToggle } from "@/components/common/theme-toggle";
 
 type AdminTab =
   | "dashboard"
   | "superadmin"
   | "complaints"
-  | "routing"
   | "map"
   | "analytics"
   | "reports"
   | "officers"
+  | "dept_ops"
+  | "officer"
   | "hierarchy"
   | "management"
   | "settings";
+
+function officerItemToOfficer(item: OfficerItem): Officer {
+  return {
+    id: item.id,
+    badgeId: item.badgeId || `OFF-${item.id.slice(0, 4)}`,
+    name: item.name,
+    designation: item.designation || "Field Officer",
+    department: item.department?.name || "General Municipal Services",
+    departmentId: item.departmentId || "dept-kmc-general",
+    authorityId: "auth-kmc",
+    authorityName: "Kolhapur Municipal Corporation (KMC)",
+    districtId: "dist-kolhapur",
+    divisionId: "div-kolhapur",
+    divisionName: "Kolhapur Division",
+    mobileNumber: item.phoneNumber,
+    email: item.email || "",
+    status: item.isAvailable ? "AVAILABLE" : "BUSY",
+    assignedComplaintsCount: item.activeCases,
+    resolvedComplaintsCount: item.resolvedCases,
+    performanceScore: Math.round((item.rating || 4.5) * 20),
+    averageResolutionHours: item.avgResolutionHours || 6.5,
+    assignedZone: item.district || "Central Zone",
+  };
+}
 
 // Static default admin profile representing verified backend credentials
 const DEFAULT_ADMIN: AuthUser = {
@@ -96,8 +195,8 @@ const DEFAULT_ADMIN: AuthUser = {
 };
 
 export default function AdminDashboardPage() {
-  const router = useRouter();
   const { t } = useLanguage();
+  const router = useRouter();
 
   // Navigation state
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
@@ -109,77 +208,152 @@ export default function AdminDashboardPage() {
   const [token, setToken] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
 
-  useEffect(() => {
-    const sessionToken = getSessionToken();
-    const session = getSessionUser();
-    if (!sessionToken || !session || (session.role !== "ADMIN" && session.role !== "SUPER_ADMIN")) {
-      router.replace(`${ROUTES.AUTH.ADMIN_LOGIN}?redirect=/admin/dashboard`);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setToken(sessionToken);
-      setAdminUser(session);
-      setAuthChecked(true);
-
-      if (typeof window !== "undefined") {
-        const params = new URLSearchParams(window.location.search);
-        const tabParam = params.get("tab") as AdminTab | null;
-        if (
-          tabParam &&
-          [
-            "dashboard",
-            "superadmin",
-            "complaints",
-            "routing",
-            "map",
-            "analytics",
-            "reports",
-            "officers",
-            "hierarchy",
-            "management",
-            "settings",
-          ].includes(tabParam)
-        ) {
-          setActiveTab(tabParam);
-        } else if (session.role === "SUPER_ADMIN") {
-          setActiveTab("superadmin");
-        }
-      }
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [router]);
-
-  // Data state: Master Incidents directly connected to dynamic database repository
+  // Data state: Master Incidents
   const [incidents, setIncidents] = useState<MasterIncident[]>([]);
-  const [officers] = useState<Officer[]>(MOCK_OFFICERS);
+  const [officers, setOfficers] = useState<Officer[]>(MOCK_OFFICERS);
+  const [dbDepartments, setDbDepartments] = useState<DepartmentItem[]>([]);
+  const [serverStats, setServerStats] = useState<{
+    total: number;
+    newComplaints: number;
+    pending: number;
+    inProgress: number;
+    resolved: number;
+    rejected: number;
+    highPriority: number;
+    slaBreached: number;
+    avgResolutionHours: number;
+    complianceRate: number;
+    resolutionRate: number;
+  } | null>(null);
 
   // Selected item modal & Assigned Work modal
   const [selectedIncident, setSelectedIncident] = useState<MasterIncident | null>(null);
   const [isAssignedWorkModalOpen, setIsAssignedWorkModalOpen] = useState(false);
 
+
+  useEffect(() => {
+    const sessionToken = getSessionToken();
+    const session = getSessionUser();
+    const normalizedSessionRole = session?.role === "ADMIN" ? "DEPARTMENT_ADMIN" : session?.role;
+    if (!sessionToken || !session || (normalizedSessionRole !== "DEPARTMENT_ADMIN" && normalizedSessionRole !== "SUPER_ADMIN" && normalizedSessionRole !== "OFFICER")) {
+      router.replace(`${ROUTES.AUTH.LOGIN}?redirect=/admin/dashboard`);
+      return;
+    }
+
+    setToken(sessionToken);
+    setAdminUser({ ...session, role: normalizedSessionRole as any });
+    if ((normalizedSessionRole === "DEPARTMENT_ADMIN" || normalizedSessionRole === "OFFICER") && session.departmentId) {
+      setSelectedDepartmentId(session.departmentId);
+    }
+
+    // Pre-populate incidents immediately from persistent local repository (0ms)
+    try {
+      const initialData = getStoredIncidents();
+      if (initialData && initialData.length > 0) {
+        setIncidents(initialData);
+      }
+    } catch {}
+
+    setAuthChecked(true);
+
+    fetchOfficersApi(
+      normalizedSessionRole !== "SUPER_ADMIN" && session.departmentId
+        ? { departmentId: session.departmentId }
+        : undefined
+    ).then((list) => {
+      if (list && list.length > 0) {
+        setOfficers(list.map(officerItemToOfficer));
+      }
+    }).catch(() => {});
+    fetchDepartmentsApi().then((deps) => {
+      if (deps && deps.length > 0) {
+        setDbDepartments(deps);
+      }
+    }).catch(() => {});
+
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab") as AdminTab | null;
+      if (
+        tabParam &&
+        [
+          "dashboard",
+          "superadmin",
+          "complaints",
+          "map",
+          "analytics",
+          "reports",
+          "officers",
+          "dept_ops",
+          "officer",
+          "hierarchy",
+          "management",
+          "settings",
+        ].includes(tabParam)
+      ) {
+        if (normalizedSessionRole === "OFFICER" && !["officer", "complaints", "map", "settings"].includes(tabParam)) {
+          setActiveTab("officer");
+        } else if (
+          normalizedSessionRole === "DEPARTMENT_ADMIN" &&
+          ["superadmin", "hierarchy", "management", "officer"].includes(tabParam)
+        ) {
+          setActiveTab("dashboard");
+        } else {
+          setActiveTab(tabParam);
+        }
+      } else if (normalizedSessionRole === "SUPER_ADMIN") {
+        setActiveTab("superadmin");
+      } else if (normalizedSessionRole === "OFFICER") {
+        setActiveTab("officer");
+      } else if (normalizedSessionRole === "DEPARTMENT_ADMIN") {
+        setActiveTab("dashboard");
+      }
+    }
+  }, [router]);
+
+
   // Initial database load & live real-time subscription
   useEffect(() => {
     let isSubscribed = true;
-    const timer = setTimeout(() => {
-      if (!isSubscribed) return;
-      // 1. Initial load from persistent database
-      const initialData = getStoredIncidents();
-      setIncidents(initialData);
-    }, 0);
+
+    // Fetch fresh complaints and live stats directly from backend database in parallel
+    const tokenVal = getSessionToken();
+    if (tokenVal) {
+      fetchAndSyncDatabaseComplaints(tokenVal).then((fresh) => {
+        if (isSubscribed && fresh && fresh.length > 0) {
+          setIncidents([...fresh]);
+        }
+      });
+      getAdminStatsApi(tokenVal).then((s) => s && isSubscribed && setServerStats(s)).catch(() => {});
+    }
 
     // 2. Real-time subscription: updates dashboard immediately on any database mutation
-    const unsubscribe = subscribeToRealTime(() => {
+    const unsubscribe = subscribeToRealTime(async () => {
       if (!isSubscribed) return;
-      const freshData = getStoredIncidents();
+      const tokenVal = getSessionToken();
+      const freshData = await fetchAndSyncDatabaseComplaints(tokenVal || undefined);
       setIncidents([...freshData]);
+      if (tokenVal) {
+        getAdminStatsApi(tokenVal).then((s) => s && setServerStats(s)).catch(() => {});
+      }
+    });
+
+    // 2b. Direct Socket.IO Real-Time Listener
+    getSocket();
+    const unsubSocket = onNotificationReceived(async () => {
+      if (!isSubscribed) return;
+      const tokenVal = getSessionToken();
+      const freshData = await fetchAndSyncDatabaseComplaints(tokenVal || undefined);
+      setIncidents([...freshData]);
+      if (tokenVal) {
+        getAdminStatsApi(tokenVal).then((s) => s && setServerStats(s)).catch(() => {});
+      }
     });
 
     return () => {
       isSubscribed = false;
-      clearTimeout(timer);
       unsubscribe();
+      unsubSocket();
     };
   }, []);
 
@@ -202,38 +376,55 @@ export default function AdminDashboardPage() {
   }, [selectedDivisionId]);
 
   const availableDepartments = useMemo(() => {
+    if (dbDepartments && dbDepartments.length > 0) {
+      return dbDepartments.map((d) => ({
+        id: d.id,
+        name: d.name,
+        code: d.code || "DEPT",
+        authorityId: "auth-kmc",
+        authorityName: "Kolhapur Municipal Corporation (KMC)",
+        districtId: "dist-kolhapur",
+        divisionId: "div-kolhapur",
+        headOfficerName: d.headOfficerName || "Department Head",
+        categories: [],
+        activeOfficersCount: d._count?.officers || 5,
+      }));
+    }
     if (selectedAuthorityId === "ALL") return INITIAL_DEPARTMENTS;
     return INITIAL_DEPARTMENTS.filter((d) => d.authorityId === selectedAuthorityId);
-  }, [selectedAuthorityId]);
+  }, [selectedAuthorityId, dbDepartments]);
 
   const handleDivisionChange = (divId: string) => {
     setSelectedDivisionId(divId);
     setSelectedAuthorityId("ALL");
-    setSelectedDepartmentId("ALL");
+    setSelectedDepartmentId(adminUser.role !== "SUPER_ADMIN" && adminUser.departmentId ? adminUser.departmentId : "ALL");
   };
 
   const handleAuthorityChange = (authId: string) => {
     setSelectedAuthorityId(authId);
-    setSelectedDepartmentId("ALL");
+    setSelectedDepartmentId(adminUser.role !== "SUPER_ADMIN" && adminUser.departmentId ? adminUser.departmentId : "ALL");
   };
 
   // Filtered Master Incidents based on Admin selections
   const displayIncidents = useMemo(() => {
-    if (incidents.length < 0) return [];
-    return queryIncidents({
-      divisionId: selectedDivisionId,
-      authorityId: selectedAuthorityId,
-      departmentId: selectedDepartmentId,
-      officerId: selectedOfficerId,
-      priority: filterPriority,
-      status: filterStatus,
-      search: searchQuery,
-    }).sort((a, b) => {
+    return queryIncidents(
+      {
+        divisionId: selectedDivisionId,
+        authorityId: selectedAuthorityId,
+        departmentId: selectedDepartmentId,
+        officerId: selectedOfficerId,
+        priority: filterPriority,
+        status: filterStatus,
+        search: searchQuery,
+      },
+      incidents
+    ).sort((a, b) => {
       if (sortBy === "count") {
         return sortOrder === "desc" ? b.complaintCount - a.complaintCount : a.complaintCount - b.complaintCount;
       }
       if (sortBy === "priority") {
         const pOrder: Record<ComplaintPriority, number> = {
+          CRITICAL: 4,
           VERY_HIGH: 4,
           HIGH: 3,
           MEDIUM: 2,
@@ -282,7 +473,7 @@ export default function AdminDashboardPage() {
       priority: filterPriority,
       status: filterStatus,
       search: searchQuery,
-    });
+    }, incidents);
   }, [
     incidents,
     selectedDivisionId,
@@ -300,6 +491,26 @@ export default function AdminDashboardPage() {
   };
   const handleSignOut = handleLogout;
 
+  const handleReassignDepartment = async (
+    incidentId: string,
+    departmentId: string,
+    reason: string
+  ) => {
+    try {
+      if (token) {
+        await reassignComplaintDepartmentApi(incidentId, departmentId, reason, token);
+        const fresh = await fetchAndSyncDatabaseComplaints(token);
+        setIncidents([...fresh]);
+        if (selectedIncident?.id === incidentId) {
+          const updated = fresh.find((i) => i.id === incidentId) || null;
+          setSelectedIncident(updated);
+        }
+      }
+    } catch (err: any) {
+      alert(err?.message || "Failed to reassign complaint department.");
+    }
+  };
+
   const handleReassignOfficer = async (
     incidentId: string,
     officerId: string,
@@ -315,6 +526,29 @@ export default function AdminDashboardPage() {
 
     assignOfficerToIncident(incidentId, officerId, officerName, adminUser.name || "Administrator");
     emitRealTimeEvent("OFFICER_ASSIGNED", { incidentId, officerId, officerName });
+    const fresh = getStoredIncidents();
+    setIncidents([...fresh]);
+    if (selectedIncident && selectedIncident.id === incidentId) {
+      const updated = fresh.find((i) => i.id === incidentId);
+      if (updated) setSelectedIncident(updated);
+    }
+  };
+
+  const handleOverridePriority = async (
+    incidentId: string,
+    newPriority: ComplaintPriority,
+    reason: string
+  ) => {
+    try {
+      if (token) {
+        await overrideComplaintPriorityApi(incidentId, newPriority, reason, token);
+      }
+    } catch (e) {
+      console.warn("Backend override priority notice:", e);
+    }
+
+    overrideIncidentPriority(incidentId, newPriority, reason, adminUser.name || "Administrator");
+    emitRealTimeEvent("PRIORITY_OVERRIDDEN", { incidentId, newPriority, reason });
     const fresh = getStoredIncidents();
     setIncidents([...fresh]);
     if (selectedIncident && selectedIncident.id === incidentId) {
@@ -369,41 +603,43 @@ export default function AdminDashboardPage() {
   };
 
   const isSuperAdmin = adminUser.role === "SUPER_ADMIN";
+  const isDepartmentAdmin = adminUser.role === "DEPARTMENT_ADMIN" || adminUser.role === "ADMIN";
+  const isOfficer = adminUser.role === "OFFICER";
 
   const sidebarLinks: { id: AdminTab; label: string; icon: React.ReactNode; badge?: string }[] = [
-    { id: "dashboard", label: "Admin Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: "dashboard", label: t("adminDashboard", "Admin Dashboard"), icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: "dept_ops", label: t("deptOperations", "Officers & Field Workers"), icon: <Building2 className="w-4 h-4" /> },
+    { id: "officer", label: t("officerWorkspace", "Officer Workspace"), icon: <Users className="w-4 h-4" /> },
     ...(isSuperAdmin
       ? [
           {
             id: "superadmin" as AdminTab,
-            label: "Super Admin Console",
+            label: t("superAdminConsole", "Super Admin Console"),
             icon: <Shield className="w-4 h-4 text-[#B45309]" />,
-            badge: "Exclusive",
+            
           },
         ]
       : []),
     {
       id: "complaints",
-      label: "Manage Complaints",
+      label: t("manageComplaints", "Manage Complaints"),
       icon: <FileText className="w-4 h-4" />,
       badge: `${incidents.length}`,
     },
-    { id: "routing", label: "Auto Routing Pipeline", icon: <Navigation className="w-4 h-4" /> },
-    { id: "map", label: "Map & Hotspots", icon: <Map className="w-4 h-4" /> },
-    { id: "analytics", label: "Reports & Analytics", icon: <BarChart3 className="w-4 h-4" /> },
-    { id: "reports", label: "Audit Reports", icon: <FileSpreadsheet className="w-4 h-4" /> },
-    { id: "officers", label: "Manage Officers", icon: <Users className="w-4 h-4" />, badge: `${officers.length}` },
-    { id: "hierarchy", label: "Hierarchy Topology", icon: <FolderTree className="w-4 h-4" /> },
-    { id: "management", label: "SLA Management", icon: <Sliders className="w-4 h-4" /> },
-    { id: "settings", label: "Settings", icon: <Settings className="w-4 h-4" /> },
+    { id: "map", label: t("mapHotspots", "Map & Hotspots"), icon: <Map className="w-4 h-4" /> },
+    { id: "analytics", label: t("reportsAnalytics", "Reports & Analytics"), icon: <BarChart3 className="w-4 h-4" /> },
+    { id: "reports", label: t("auditReports", "Audit Reports"), icon: <FileSpreadsheet className="w-4 h-4" /> },
+    { id: "officers", label: t("manageOfficers", "Manage Officers"), icon: <Users className="w-4 h-4" />, badge: `${officers.length}` },
+    { id: "hierarchy", label: t("hierarchyTopology", "Hierarchy Topology"), icon: <FolderTree className="w-4 h-4" /> },
+    { id: "settings", label: t("settings", "Settings"), icon: <Settings className="w-4 h-4" /> },
   ];
 
   if (!authChecked) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
-        <div className="text-center p-8 bg-white border border-[#CBD5E1] rounded-2xl shadow-xs">
+      <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0B0F17] flex items-center justify-center transition-colors">
+        <div className="text-center p-8 bg-white dark:bg-[#111827] border border-[#CBD5E1] dark:border-[#1E293B] rounded-2xl shadow-xs">
           <div className="w-10 h-10 border-3 border-[#083B7A] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <h2 className="text-lg font-bold text-[#0F172A]">Verifying Admin Credentials...</h2>
+          <h2 className="text-lg font-bold text-[#0F172A] dark:text-[#F8FAFC]">Verifying Admin Credentials...</h2>
           <p className="text-xs text-[#64748B] mt-1">Authorized Department Personnel Only.</p>
         </div>
       </div>
@@ -411,36 +647,28 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col selection:bg-[#EAF2FF] selection:text-[#0B4EA2]">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0B0F17] text-[#0F172A] dark:text-[#F8FAFC] flex flex-col selection:bg-[#EAF2FF] selection:text-[#0B4EA2] transition-colors">
       {/* TOP HEADER WITH BRANDING & STATIC ADMIN PROFILE */}
-      <header className="w-full bg-white border-b border-[#E2E8F0] h-16 px-4 sm:px-6 sticky top-0 z-40 flex items-center justify-between shadow-xs">
+      <header className="w-full bg-white dark:bg-[#0D131F] border-b border-[#E2E8F0] dark:border-[#1E293B] h-16 px-4 sm:px-6 sticky top-0 z-40 flex items-center justify-between shadow-xs transition-colors">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="md:hidden p-2 rounded-lg text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9]"
+            className="md:hidden p-2 rounded-lg text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-[#F8FAFC] hover:bg-[#F1F5F9] dark:hover:bg-[#1E293B]"
             aria-label="Toggle navigation"
           >
             {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-[#0B4EA2] flex items-center justify-center text-white shadow-xs">
-              <Shield className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="block text-sm sm:text-base font-bold text-[#0F172A] leading-tight">
-                CivicResolve Administration Portal
-              </span>
-              <span className="hidden sm:block text-[11px] font-medium text-[#64748B]">
-                Directorate of Municipal Services • Officer Console
-              </span>
-            </div>
-          </div>
+          <CivicResolveLogo
+            subtitle={t("directorateSubtitle", "Directorate of Municipal Services • Officer Console")}
+            href={ROUTES.ADMIN.DASHBOARD}
+          />
         </div>
 
         {/* Right header actions: Static Admin Identity, Alerts, Sign out, Language */}
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 justify-end">
+          <ThemeToggle />
           <LanguageSwitcher />
 
           {isSuperAdmin && (
@@ -448,17 +676,17 @@ export default function AdminDashboardPage() {
               variant="outline"
               size="sm"
               onClick={() => setActiveTab("superadmin")}
-              className={`text-xs h-9 border-[#B45309] text-[#B45309] hover:bg-[#FFF7E6] font-semibold ${
+              className={`text-xs h-9 border-[#B45309] dark:border-[#D97706]/50 text-[#B45309] dark:text-[#FBBF24] hover:bg-[#FFF7E6] dark:hover:bg-[#78350F]/20 font-semibold ${
                 activeTab === "superadmin" ? "bg-[#FFF7E6]" : ""
               }`}
               leftIcon={<Shield className="w-3.5 h-3.5 text-[#B45309]" />}
             >
-              Super Admin Console
+              <span className="hidden md:inline">{t("superAdminConsole", "Super Admin Console")}</span><span className="inline md:hidden">Super Admin</span>
             </Button>
           )}
 
           {/* Static Admin Profile (Loaded from backend login session) */}
-          <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC]">
+          <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC] dark:bg-[#111827]">
             <div className={`w-8 h-8 rounded-full ${isSuperAdmin ? "bg-[#B45309]" : "bg-[#0B4EA2]"} text-white flex items-center justify-center font-bold text-xs shadow-xs`}>
               {adminUser.name
                 ? adminUser.name
@@ -473,21 +701,26 @@ export default function AdminDashboardPage() {
             </div>
             <div className="text-left hidden sm:block">
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-xs text-[#0F172A] leading-tight">
+                <span className="font-bold text-xs text-[#0F172A] dark:text-[#F8FAFC] leading-tight">
                   {adminUser.name || (isSuperAdmin ? "Sushant More" : "Rajesh Sharma")}
                 </span>
+                {adminUser.departmentName && !isSuperAdmin && (
+                  <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-[#EAF2FF] dark:bg-[#1E3A8A]/40 text-[#0B4EA2] dark:text-[#93C5FD] border border-[#BFDBFE] dark:border-[#1D4ED8]/50">
+                    {adminUser.departmentName}
+                  </span>
+                )}
                 {isSuperAdmin ? (
-                  <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-[#FFF7E6] text-[#B45309] border border-[#FDE68A] flex items-center gap-1">
+                  <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-[#FFF7E6] dark:bg-[#78350F]/30 text-[#B45309] dark:text-[#FBBF24] border border-[#FDE68A] dark:border-[#B45309]/50 flex items-center gap-1">
                     <Shield className="w-2.5 h-2.5 text-[#B45309]" />
                     SUPER ADMIN
                   </span>
                 ) : (
-                  <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#EAF2FF] text-[#0B4EA2] border border-[#BFDBFE]">
+                  <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#EAF2FF] dark:bg-[#1E3A8A]/30 text-[#0B4EA2] dark:text-[#60A5FA] border border-[#BFDBFE] dark:border-[#1E40AF]/50">
                     Admin
                   </span>
                 )}
               </div>
-              <span className="text-[10px] text-[#64748B] font-medium block">
+              <span className="text-[10px] text-[#64748B] dark:text-[#94A3B8] font-medium block">
                 {adminUser.badgeId || (isSuperAdmin ? "MH-SADM-01" : "ADM-HQ-401")} • {adminUser.designation || (isSuperAdmin ? "Super Administrator" : "Administrator")}
               </span>
             </div>
@@ -498,7 +731,7 @@ export default function AdminDashboardPage() {
             <button
               type="button"
               onClick={() => setNotificationsOpen(!notificationsOpen)}
-              className="relative p-2 rounded-lg text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9]"
+              className="relative h-9 w-9 flex items-center justify-center rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-[#F8FAFC] hover:bg-[#F1F5F9] dark:hover:bg-[#1E293B] shadow-2xs transition-colors"
               aria-label="Notifications"
             >
               <Bell className="w-5 h-5" />
@@ -508,9 +741,9 @@ export default function AdminDashboardPage() {
             </button>
 
             {notificationsOpen && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl border border-[#CBD5E1] shadow-xl p-4 z-50 animate-in fade-in zoom-in-95 duration-150">
-                <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2 mb-3">
-                  <div className="flex items-center gap-1.5 font-bold text-xs text-[#0F172A]">
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-[#111827] rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-xl p-4 z-50 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between border-b border-[#E2E8F0] dark:border-[#1E293B] pb-2 mb-3">
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-[#0F172A] dark:text-[#F8FAFC]">
                     <AlertTriangle className="w-4 h-4 text-[#DC2626]" />
                     <span>Statewide Critical Incidents ({criticalIncidents.length})</span>
                   </div>
@@ -536,7 +769,7 @@ export default function AdminDashboardPage() {
                           setSelectedIncident(c);
                           setNotificationsOpen(false);
                         }}
-                        className="p-2.5 rounded-lg border border-[#FECACA] bg-[#FEF2F2]/40 hover:bg-[#FEF2F2] cursor-pointer transition-colors text-xs space-y-1"
+                        className="p-2.5 rounded-lg border border-[#FECACA] dark:border-[#DC2626]/40 bg-[#FEF2F2]/40 dark:bg-[#7F1D1D]/20 hover:bg-[#FEF2F2] dark:hover:bg-[#7F1D1D]/30 cursor-pointer transition-colors text-xs space-y-1"
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-mono font-bold text-[#DC2626]">
@@ -544,9 +777,9 @@ export default function AdminDashboardPage() {
                           </span>
                           <PriorityBadge priority={c.priority} size="sm" />
                         </div>
-                        <p className="font-semibold text-[#0F172A] truncate">{c.title}</p>
+                        <p className="font-semibold text-[#0F172A] dark:text-[#F8FAFC] truncate">{c.title}</p>
                         <span className="text-[11px] text-[#64748B] block truncate">
-                          📍 {c.authorityName} • {c.location} • {c.complaintCount} reports
+                          {c.authorityName} • {c.location} • {c.complaintCount} reports
                         </span>
                       </div>
                     ))
@@ -563,7 +796,7 @@ export default function AdminDashboardPage() {
             className="text-xs h-9 inline-flex"
             leftIcon={<LogOut className="w-3.5 h-3.5" />}
           >
-            Logout
+            {t("logout", "Logout")}
           </Button>
         </div>
       </header>
@@ -573,15 +806,25 @@ export default function AdminDashboardPage() {
         {/* SIDEBAR NAVIGATION */}
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-[#E2E8F0] pt-16 md:pt-0 transform md:relative md:translate-x-0 transition-transform duration-200 ease-in-out flex flex-col justify-between",
+            "fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-[#0D131F] border-r border-[#E2E8F0] dark:border-[#1E293B] pt-16 md:pt-0 transform md:relative md:translate-x-0 transition-all duration-200 ease-in-out flex flex-col justify-between",
             sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
           )}
         >
           <div className="py-5 px-3 space-y-1">
-            <div className="px-3 pb-2 text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
-              Central Administration
+            <div className="px-3 pb-2 text-[11px] font-bold text-[#64748B] dark:text-[#94A3B8] uppercase tracking-wider">
+              {t("centralAdministration", "Central Administration")}
             </div>
-            {sidebarLinks.map((link) => (
+            {sidebarLinks
+              .filter((link) => {
+                if (isOfficer) {
+                  return ["officer", "complaints", "map", "settings"].includes(link.id);
+                }
+                if (isDepartmentAdmin) {
+                  return ["dashboard", "dept_ops", "complaints", "map", "analytics", "reports", "officers", "settings"].includes(link.id);
+                }
+                return !["dept_ops", "officer"].includes(link.id);
+              })
+              .map((link) => (
               <button
                 key={link.id}
                 type="button"
@@ -592,8 +835,8 @@ export default function AdminDashboardPage() {
                 className={cn(
                   "w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                   activeTab === link.id
-                    ? "bg-[#0B4EA2] text-white font-semibold shadow-xs"
-                    : "text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]"
+                    ? "bg-[#0B4EA2] dark:bg-[#1D4ED8] text-white font-semibold shadow-xs"
+                    : "text-[#475569] dark:text-[#94A3B8] hover:bg-[#F8FAFC] dark:hover:bg-[#161F30] hover:text-[#0F172A] dark:hover:text-[#F8FAFC]"
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -606,7 +849,7 @@ export default function AdminDashboardPage() {
                       "text-xs font-semibold px-2 py-0.5 rounded-full",
                       activeTab === link.id
                         ? "bg-white/20 text-white"
-                        : "bg-[#F1F5F9] text-[#475569]"
+                        : "bg-[#F1F5F9] dark:bg-[#1E293B] text-[#475569] dark:text-[#CBD5E1]"
                     )}
                   >
                     {link.badge}
@@ -616,17 +859,14 @@ export default function AdminDashboardPage() {
             ))}
           </div>
 
-          <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAFC] text-xs space-y-1.5">
-            <div className="flex items-center justify-between text-[#0F172A] font-semibold">
-              <span>Jurisdiction Engine</span>
+          <div className="p-4 border-t border-[#E2E8F0] dark:border-[#1E293B] bg-[#F8FAFC] dark:bg-[#0B0F17] text-xs space-y-1.5">
+            <div className="flex items-center justify-between text-[#0F172A] dark:text-[#F8FAFC] font-semibold">
+              <span>{t("municipalServices", "Municipal Services")}</span>
               <span className="text-[#16A34A] font-semibold text-[11px] flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]" />
-                Operational
+                {t("operational", "Operational")}
               </span>
             </div>
-            <p className="text-[11px] text-[#64748B]">
-              Auto-Routing: GPS $\rightarrow$ Division $\rightarrow$ Auth $\rightarrow$ Officer
-            </p>
           </div>
         </aside>
 
@@ -648,13 +888,13 @@ export default function AdminDashboardPage() {
           {activeTab === "dashboard" && (
             <div className="space-y-6">
               {/* Top Banner */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E2E8F0] pb-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E2E8F0] dark:border-[#1E293B] pb-5">
                 <div>
-                  <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] tracking-tight">
-                    Admin Dashboard
+                  <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] dark:text-[#F8FAFC] tracking-tight">
+                    {t("adminDashboard", "Admin Dashboard")}
                   </h1>
-                  <p className="text-xs sm:text-sm text-[#64748B] mt-1">
-                    Centralized platform monitoring complaints, SLA compliance, and officer dispatch across jurisdictions.
+                  <p className="text-xs sm:text-sm text-[#64748B] dark:text-[#94A3B8] mt-1">
+                    Centralized platform monitoring complaints and officer dispatch across jurisdictions.
                   </p>
                 </div>
 
@@ -675,77 +915,159 @@ export default function AdminDashboardPage() {
                     className="text-xs font-semibold"
                     leftIcon={<FileText className="w-3.5 h-3.5" />}
                   >
-                    Grievance Queue
+                    {t("grievanceQueueTitle", "Grievance Queue")}
                   </Button>
                 </div>
               </div>
 
-              {/* WORKFLOW SIMULATION TOOLBAR */}
-              <ClusteringLiveToolbar onRefresh={() => setIncidents([...getStoredIncidents()])} />
 
-              {/* ESSENTIAL METRICS: 4 CORE CIVIC KPI CARDS */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* ESSENTIAL METRICS: 9 CORE CIVIC KPI CARDS FROM DATABASE */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">
                 {/* 1. Total Complaints */}
-                <div className="bg-white p-5 rounded-xl border border-[#CBD5E1] shadow-2xs">
+                <div className="bg-white dark:bg-[#111827] p-4.5 rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-2xs transition-colors">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
-                      Total Complaints
+                    <span className="text-[11px] font-bold text-[#64748B] dark:text-[#94A3B8] uppercase tracking-wider">
+                      {t("kpiTotalComplaints", "Total Complaints")}
                     </span>
                     <FileText className="w-4 h-4 text-[#0B4EA2]" />
                   </div>
-                  <div className="text-2xl sm:text-3xl font-bold text-[#0F172A] mt-2 font-mono">
-                    {stats.totalComplaints}
+                  <div className="text-2xl sm:text-3xl font-bold text-[#0F172A] dark:text-[#F8FAFC] mt-2 font-mono">
+                    {serverStats ? serverStats.total : stats.totalComplaints}
                   </div>
-                  <span className="text-xs text-[#64748B] mt-1 block">
-                    Citizen reports logged
+                  <span className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1 block">
+                    All registered grievances
                   </span>
                 </div>
 
-                {/* 2. Pending */}
-                <div className="bg-white p-5 rounded-xl border border-[#CBD5E1] shadow-2xs">
+                {/* 2. New Complaints */}
+                <div className="bg-white dark:bg-[#111827] p-4.5 rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-2xs transition-colors">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
-                      Pending
+                    <span className="text-[11px] font-bold text-[#64748B] dark:text-[#94A3B8] uppercase tracking-wider">
+                      {t("kpiActiveIncidents", "New Complaints")}
+                    </span>
+                    <Sparkles className="w-4 h-4 text-[#2563EB]" />
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-bold text-[#2563EB] mt-2 font-mono">
+                    {serverStats ? serverStats.newComplaints : stats.newComplaints}
+                  </div>
+                  <span className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1 block">
+                    Awaiting initial assignment
+                  </span>
+                </div>
+
+                {/* 3. Pending Complaints */}
+                <div className="bg-white dark:bg-[#111827] p-4.5 rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-2xs transition-colors">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-[#64748B] dark:text-[#94A3B8] uppercase tracking-wider">
+                      {t("kpiPendingVerification", "Pending Complaints")}
                     </span>
                     <Clock className="w-4 h-4 text-[#D97706]" />
                   </div>
                   <div className="text-2xl sm:text-3xl font-bold text-[#D97706] mt-2 font-mono">
-                    {stats.pendingCases + stats.unassignedCases}
+                    {serverStats ? serverStats.pending : stats.pendingCases}
                   </div>
-                  <span className="text-xs text-[#64748B] mt-1 block">
-                    {stats.unassignedCases} unassigned • {stats.pendingCases} in progress
+                  <span className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1 block">
+                    Assigned & awaiting action
                   </span>
                 </div>
 
-                {/* 3. High Priority */}
-                <div className="bg-white p-5 rounded-xl border border-[#CBD5E1] shadow-2xs">
+                {/* 4. In Progress */}
+                <div className="bg-white dark:bg-[#111827] p-4.5 rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-2xs transition-colors">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
-                      High Priority
+                    <span className="text-[11px] font-bold text-[#64748B] dark:text-[#94A3B8] uppercase tracking-wider">
+                      {t("kpiInProgress", "In Progress")}
                     </span>
-                    <AlertTriangle className="w-4 h-4 text-[#DC2626]" />
+                    <RotateCcw className="w-4 h-4 text-[#4F46E5]" />
                   </div>
-                  <div className="text-2xl sm:text-3xl font-bold text-[#DC2626] mt-2 font-mono">
-                    {stats.highPriorityCases}
+                  <div className="text-2xl sm:text-3xl font-bold text-[#4F46E5] mt-2 font-mono">
+                    {serverStats ? serverStats.inProgress : stats.inProgressCases}
                   </div>
-                  <span className="text-xs text-[#64748B] mt-1 block">
-                    Critical & safety issues
+                  <span className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1 block">
+                    Field crews actively working
                   </span>
                 </div>
 
-                {/* 4. Resolved */}
-                <div className="bg-white p-5 rounded-xl border border-[#CBD5E1] shadow-2xs">
+                {/* 5. Resolved Complaints */}
+                <div className="bg-white dark:bg-[#111827] p-4.5 rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-2xs transition-colors">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
-                      Resolved
+                    <span className="text-[11px] font-bold text-[#64748B] dark:text-[#94A3B8] uppercase tracking-wider">
+                      {t("kpiResolved", "Resolved")}
                     </span>
                     <CheckCircle2 className="w-4 h-4 text-[#16A34A]" />
                   </div>
                   <div className="text-2xl sm:text-3xl font-bold text-[#16A34A] mt-2 font-mono">
-                    {stats.resolvedCases}
+                    {serverStats ? serverStats.resolved : stats.resolvedCases}
                   </div>
-                  <span className="text-xs text-[#64748B] mt-1 block">
-                    Remediated with evidence
+                  <span className="text-[11px] text-[#16A34A] font-medium mt-1 block">
+                    Verified with evidence
+                  </span>
+                </div>
+
+                {/* 6. Rejected Complaints */}
+                <div className="bg-white dark:bg-[#111827] p-4.5 rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-2xs transition-colors">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-[#64748B] dark:text-[#94A3B8] uppercase tracking-wider">
+                      {t("statusRejected", "Rejected")}
+                    </span>
+                    <XCircle className="w-4 h-4 text-[#64748B]" />
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-bold text-[#64748B] mt-2 font-mono">
+                    {serverStats ? serverStats.rejected : (stats.rejectedCases || 0)}
+                  </div>
+                  <span className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1 block">
+                    Invalid or non-civic filings
+                  </span>
+                </div>
+
+                {/* 7. High Priority Complaints */}
+                <div className="bg-white dark:bg-[#111827] p-4.5 rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-2xs transition-colors">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-[#64748B] dark:text-[#94A3B8] uppercase tracking-wider">
+                      {t("kpiHighPriority", "High Priority")}
+                    </span>
+                    <AlertTriangle className="w-4 h-4 text-[#DC2626]" />
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-bold text-[#DC2626] mt-2 font-mono">
+                    {serverStats ? serverStats.highPriority : stats.highPriorityCases}
+                  </div>
+                  <span className="text-[11px] text-[#DC2626] font-medium mt-1 block">
+                    {t("kpiHighPriority", "Critical / High")}
+                  </span>
+                </div>
+
+                {/* 8. Average Resolution Time */}
+                <div className="bg-white dark:bg-[#111827] p-4.5 rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-2xs transition-colors">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-[#64748B] dark:text-[#94A3B8] uppercase tracking-wider">
+                      {t("kpiAvgResolution", "Avg. Resolution Time")}
+                    </span>
+                    <Clock className="w-4 h-4 text-[#7C3AED]" />
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-bold text-[#7C3AED] mt-2 font-mono">
+                    {serverStats && serverStats.avgResolutionHours > 0
+                      ? `${serverStats.avgResolutionHours}h`
+                      : stats.avgResolutionHours && stats.avgResolutionHours > 0
+                      ? `${stats.avgResolutionHours}h`
+                      : "< 24h"}
+                  </div>
+                  <span className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1 block">
+                    {t("kpiAvgResolution", "Avg Resolution")}
+                  </span>
+                </div>
+
+                {/* 9. Complaint {t("kpiComplianceRate", "Resolution Rate")} */}
+                <div className="bg-white dark:bg-[#111827] p-4.5 rounded-xl border border-[#CBD5E1] dark:border-[#1E293B] shadow-2xs col-span-2 md:col-span-1 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-[#64748B] dark:text-[#94A3B8] uppercase tracking-wider">
+                      {t("kpiComplianceRate", "Resolution Rate")}
+                    </span>
+                    <TrendingUp className="w-4 h-4 text-[#059669]" />
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-bold text-[#059669] mt-2 font-mono">
+                    {serverStats ? `${serverStats.resolutionRate}%` : `${stats.resolutionRate || 0}%`}
+                  </div>
+                  <span className="text-[11px] text-[#059669] font-medium mt-1 block">
+                    {serverStats ? `${serverStats.complianceRate}% Clearance rate` : "Overall clearance"}
                   </span>
                 </div>
               </div>
@@ -755,7 +1077,7 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-bold text-base text-[#0F172A] flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-[#0B4EA2]" />
-                    <span>Statewide Interactive Google Map & Hotspots</span>
+                    <span>{t("mapHotspots", "Geographic Map & Hotspots")}</span>
                   </h3>
                   <button
                     type="button"
@@ -777,13 +1099,13 @@ export default function AdminDashboardPage() {
           {/* ==================== TAB 2: COMPLAINTS TABLE WITH MULTI-LEVEL FILTERS ==================== */}
           {activeTab === "complaints" && (
             <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E2E8F0] pb-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E2E8F0] dark:border-[#1E293B] pb-5">
                 <div>
-                  <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] tracking-tight">
-                    Grievance Queue & Multi-Tier Records
+                  <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] dark:text-[#F8FAFC] tracking-tight">
+                    {t("grievanceQueueTitle", "Complaints Queue")}
                   </h1>
-                  <p className="text-xs sm:text-sm text-[#64748B] mt-1">
-                    Central administrative control displaying {displayIncidents.length} records.
+                  <p className="text-xs sm:text-sm text-[#64748B] dark:text-[#94A3B8] mt-1">
+                    {t("centralAdminSubtitle", "Central administrative control displaying {count} records.").replace("{count}", String(displayIncidents.length))}
                   </p>
                 </div>
 
@@ -794,7 +1116,7 @@ export default function AdminDashboardPage() {
                     onClick={() => {
                       setSelectedDivisionId("ALL");
                       setSelectedAuthorityId("ALL");
-                      setSelectedDepartmentId("ALL");
+                      setSelectedDepartmentId(adminUser.role !== "SUPER_ADMIN" && adminUser.departmentId ? adminUser.departmentId : "ALL");
                       setFilterPriority("ALL");
                       setFilterStatus("ALL");
                       setFilterDate("ALL");
@@ -803,22 +1125,22 @@ export default function AdminDashboardPage() {
                     className="text-xs"
                     leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
                   >
-                    Reset Filters
+                    {t("resetFilters", "Reset Filters")}
                   </Button>
                 </div>
               </div>
 
               {/* CASCADING HIERARCHICAL FILTER BAR */}
-              <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] shadow-xs space-y-3">
+              <div className="bg-white dark:bg-[#111827] p-4 rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-xs space-y-3 transition-colors">
                 <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
                   <div className="relative flex-1">
                     <Search className="w-4 h-4 text-[#64748B] absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
-                      placeholder="Search across ID, title, phone, division, or authority..."
+                      placeholder={t("filterSearchPlaceholder", "Search across ID, title, phone, division, or authority...")}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full h-10 pl-9 pr-3 rounded-lg border border-[#CBD5E1] text-xs sm:text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:border-[#0B4EA2]"
+                      className="w-full h-10 pl-9 pr-3 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-xs sm:text-sm text-[#0F172A] dark:text-[#F8FAFC] placeholder:text-[#94A3B8] dark:placeholder:text-[#64748B] focus:outline-none focus:border-[#0B4EA2] dark:focus:border-[#3B82F6]"
                     />
                   </div>
 
@@ -837,8 +1159,8 @@ export default function AdminDashboardPage() {
                       className={cn(
                         "h-10 px-3 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors",
                         sortBy === "priority"
-                          ? "bg-[#EAF2FF] text-[#0B4EA2] border-[#BFDBFE]"
-                          : "bg-white text-[#475569] border-[#CBD5E1]"
+                          ? "bg-[#EAF2FF] dark:bg-[#1E3A8A]/30 text-[#0B4EA2] dark:text-[#60A5FA] border-[#BFDBFE] dark:border-[#1E40AF]/50"
+                          : "bg-white dark:bg-[#161F30] text-[#475569] dark:text-[#94A3B8] border-[#CBD5E1] dark:border-[#2D3748]"
                       )}
                     >
                       <ArrowUpDown className="w-3.5 h-3.5" />
@@ -858,8 +1180,8 @@ export default function AdminDashboardPage() {
                       className={cn(
                         "h-10 px-3 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors",
                         sortBy === "date"
-                          ? "bg-[#EAF2FF] text-[#0B4EA2] border-[#BFDBFE]"
-                          : "bg-white text-[#475569] border-[#CBD5E1]"
+                          ? "bg-[#EAF2FF] dark:bg-[#1E3A8A]/30 text-[#0B4EA2] dark:text-[#60A5FA] border-[#BFDBFE] dark:border-[#1E40AF]/50"
+                          : "bg-white dark:bg-[#161F30] text-[#475569] dark:text-[#94A3B8] border-[#CBD5E1] dark:border-[#2D3748]"
                       )}
                     >
                       <ArrowUpDown className="w-3.5 h-3.5" />
@@ -869,18 +1191,18 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* CASCADING DROPDOWNS: Division -> Authority -> Department -> Priority -> Status -> Date */}
-                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-2 border-t border-[#F1F5F9] text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-2 border-t border-[#F1F5F9] dark:border-[#1E293B] text-xs">
                   {/* Division Filter */}
                   <div>
                     <label className="text-[10px] uppercase font-bold text-[#64748B] block mb-1">
-                      1. Division:
+                      {t("filterDivision", "1. Division:")}
                     </label>
                     <select
                       value={selectedDivisionId}
                       onChange={(e) => handleDivisionChange(e.target.value)}
-                      className="w-full h-9 px-2 rounded-lg border border-[#CBD5E1] bg-white text-[#0F172A]"
+                      className="w-full h-9 px-2 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-[#0F172A] dark:text-[#F8FAFC]"
                     >
-                      <option value="ALL">All Divisions</option>
+                      <option value="ALL">{t("allDivisions", "All Divisions")}</option>
                       {INITIAL_DIVISIONS.map((d) => (
                         <option key={d.id} value={d.id}>
                           {d.name}
@@ -892,14 +1214,14 @@ export default function AdminDashboardPage() {
                   {/* Local Authority Filter */}
                   <div>
                     <label className="text-[10px] uppercase font-bold text-[#64748B] block mb-1">
-                      2. Local Authority:
+                      {t("filterAuthority", "2. Local Authority:")}
                     </label>
                     <select
                       value={selectedAuthorityId}
                       onChange={(e) => handleAuthorityChange(e.target.value)}
-                      className="w-full h-9 px-2 rounded-lg border border-[#CBD5E1] bg-white text-[#0F172A]"
+                      className="w-full h-9 px-2 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-[#0F172A] dark:text-[#F8FAFC]"
                     >
-                      <option value="ALL">All Authorities</option>
+                      <option value="ALL">{t("allAuthorities", "All Authorities")}</option>
                       {availableAuthorities.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.name}
@@ -911,15 +1233,20 @@ export default function AdminDashboardPage() {
                   {/* Department Filter */}
                   <div>
                     <label className="text-[10px] uppercase font-bold text-[#64748B] block mb-1">
-                      3. Department:
+                      {t("filterDepartment", "3. Department:")}
                     </label>
                     <select
                       value={selectedDepartmentId}
+                      disabled={!isSuperAdmin && Boolean(adminUser.departmentId)}
                       onChange={(e) => setSelectedDepartmentId(e.target.value)}
-                      className="w-full h-9 px-2 rounded-lg border border-[#CBD5E1] bg-white text-[#0F172A]"
+                      className="w-full h-9 px-2 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-[#0F172A] dark:text-[#F8FAFC]"
                     >
-                      <option value="ALL">All Departments</option>
-                      {availableDepartments.map((dept) => (
+                      {(isSuperAdmin || !adminUser.departmentId) && (
+                        <option value="ALL">{t("allDepartments", "All Departments")}</option>
+                      )}
+                      {availableDepartments
+                        .filter((dept) => isSuperAdmin || !adminUser.departmentId || dept.id === adminUser.departmentId)
+                        .map((dept) => (
                         <option key={dept.id} value={dept.id}>
                           {dept.name}
                         </option>
@@ -930,52 +1257,52 @@ export default function AdminDashboardPage() {
                   {/* Priority Filter */}
                   <div>
                     <label className="text-[10px] uppercase font-bold text-[#64748B] block mb-1">
-                      4. Priority:
+                      {t("filterPriority", "4. Priority:")}
                     </label>
                     <select
                       value={filterPriority}
                       onChange={(e) => setFilterPriority(e.target.value)}
-                      className="w-full h-9 px-2 rounded-lg border border-[#CBD5E1] bg-white text-[#0F172A]"
+                      className="w-full h-9 px-2 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-[#0F172A] dark:text-[#F8FAFC]"
                     >
-                      <option value="ALL">All Priorities</option>
-                      <option value="VERY_HIGH">VERY HIGH</option>
-                      <option value="HIGH">HIGH</option>
-                      <option value="MEDIUM">MEDIUM</option>
-                      <option value="LOW">LOW</option>
+                      <option value="ALL">{t("allPriorities", "All Priorities")}</option>
+                      <option value="VERY_HIGH">{t("priorityCritical", "CRITICAL")}</option>
+                      <option value="HIGH">{t("priorityHigh", "HIGH")}</option>
+                      <option value="MEDIUM">{t("priorityMedium", "MEDIUM")}</option>
+                      <option value="LOW">{t("priorityLow", "LOW")}</option>
                     </select>
                   </div>
 
                   {/* Status Filter */}
                   <div>
                     <label className="text-[10px] uppercase font-bold text-[#64748B] block mb-1">
-                      5. Status:
+                      {t("filterStatus", "5. Status:")}
                     </label>
                     <select
                       value={filterStatus}
                       onChange={(e) => setFilterStatus(e.target.value)}
-                      className="w-full h-9 px-2 rounded-lg border border-[#CBD5E1] bg-white text-[#0F172A]"
+                      className="w-full h-9 px-2 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-[#0F172A] dark:text-[#F8FAFC]"
                     >
-                      <option value="ALL">All Statuses</option>
-                      <option value="SUBMITTED">SUBMITTED</option>
+                      <option value="ALL">{t("allStatuses", "All Statuses")}</option>
+                      <option value="SUBMITTED">{t("statusSubmitted", "SUBMITTED")}</option>
                       <option value="VALIDATING">VALIDATING</option>
-                      <option value="ASSIGNED">ASSIGNED</option>
-                      <option value="IN_PROGRESS">IN PROGRESS</option>
-                      <option value="RESOLVED">RESOLVED</option>
-                      <option value="ESCALATED">ESCALATED</option>
+                      <option value="ASSIGNED">{t("statusAssigned", "ASSIGNED")}</option>
+                      <option value="IN_PROGRESS">{t("statusInProgress", "IN PROGRESS")}</option>
+                      <option value="RESOLVED">{t("statusResolved", "RESOLVED")}</option>
+                      <option value="ESCALATED">{t("statusOverdue", "ESCALATED")}</option>
                     </select>
                   </div>
 
                   {/* Date Filter */}
                   <div>
                     <label className="text-[10px] uppercase font-bold text-[#64748B] block mb-1">
-                      6. Logged Date:
+                      {t("filterLoggedDate", "6. Logged Date:")}
                     </label>
                     <select
                       value={filterDate}
                       onChange={(e) => setFilterDate(e.target.value)}
-                      className="w-full h-9 px-2 rounded-lg border border-[#CBD5E1] bg-white text-[#0F172A]"
+                      className="w-full h-9 px-2 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-[#0F172A] dark:text-[#F8FAFC]"
                     >
-                      <option value="ALL">All Dates</option>
+                      <option value="ALL">{t("allDates", "All Dates")}</option>
                       <option value="2026-10-06">Today (06 Oct)</option>
                       <option value="2026-10-05">05 Oct 2026</option>
                       <option value="2026-10-04">04 Oct 2026</option>
@@ -985,14 +1312,14 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Complaints Table */}
-              <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-xs overflow-hidden">
-                <div className="px-5 py-4 border-b border-[#E2E8F0] flex items-center justify-between">
+              <div className="bg-white dark:bg-[#111827] rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-xs overflow-hidden transition-colors">
+                <div className="px-5 py-4 border-b border-[#E2E8F0] dark:border-[#1E293B] flex items-center justify-between">
                   <div>
-                    <h4 className="font-bold text-sm sm:text-base text-[#0F172A]">
-                      Master Incident & Clustered Grievance Records ({displayIncidents.length})
+                    <h4 className="font-bold text-sm sm:text-base text-[#0F172A] dark:text-[#F8FAFC]">
+                      {t("masterIncidentsTitle", "All Complaints")} ({displayIncidents.length})
                     </h4>
                     <span className="text-xs text-[#64748B]">
-                      Consolidated multi-citizen complaints grouped by proximity, category, and time window
+                      {t("masterIncidentsSubtitle", "Citizen grievances filtered by your selection")}
                     </span>
                   </div>
                 </div>
@@ -1000,49 +1327,52 @@ export default function AdminDashboardPage() {
                 {displayIncidents.length === 0 ? (
                   <div className="p-12 text-center text-[#64748B]">
                     <FileText className="w-10 h-10 mx-auto text-[#CBD5E1] mb-2" />
-                    <p className="font-semibold text-sm text-[#0F172A]">
-                      No incidents matching the selected filters.
+                    <p className="font-semibold text-sm text-[#0F172A] dark:text-[#F8FAFC]">
+                      {t("noIncidentsMatching", "No incidents matching the selected filters.")}
                     </p>
                     <p className="text-xs text-[#64748B] mt-1">
-                      Try adjusting division, status, or keyword filters.
+                      {t("adjustFiltersAdvice", "Try adjusting division, status, or keyword filters.")}
                     </p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse text-xs sm:text-sm">
                       <thead>
-                        <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#475569] font-bold uppercase tracking-wider text-xs">
-                          <th className="py-3 px-4">Incident ID</th>
-                          <th className="py-3 px-4">Grievance Details</th>
-                          <th className="py-3 px-4">Cluster Volume</th>
-                          <th className="py-3 px-4">Jurisdiction & Authority</th>
-                          <th className="py-3 px-4">Priority</th>
-                          <th className="py-3 px-4">Status</th>
-                          <th className="py-3 px-4">Assigned Officer</th>
-                          <th className="py-3 px-4">SLA Deadline</th>
-                          <th className="py-3 px-4 text-right">Action</th>
+                        <tr className="bg-[#F8FAFC] dark:bg-[#161F30] border-b border-[#E2E8F0] dark:border-[#1E293B] text-[#475569] dark:text-[#94A3B8] font-bold uppercase tracking-wider text-xs">
+                          <th className="py-3 px-4">{t("tableIncidentId", "Incident ID")}</th>
+                          <th className="py-3 px-4">{t("tableGrievanceDetails", "Grievance Details")}</th>
+                          <th className="py-3 px-4">{t("tableClusterVolume", "Cluster Volume")}</th>
+                          <th className="py-3 px-4">{t("tableJurisdiction", "Jurisdiction & Authority")}</th>
+                          <th className="py-3 px-4">{t("tablePriority", "Priority")}</th>
+                          <th className="py-3 px-4">{t("tableStatus", "Status")}</th>
+                          <th className="py-3 px-4">{t("tableAssignedOfficer", "Assigned Officer")}</th>
+                          <th className="py-3 px-4">{t("tableReportedDate", "Reported Date")}</th>
+                          <th className="py-3 px-4 text-right">{t("tableAction", "Action")}</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#E2E8F0]">
+                      <tbody className="divide-y divide-[#E2E8F0] dark:divide-[#1E293B]">
                         {displayIncidents.map((item) => (
                           <tr
                             key={item.id}
                             onClick={() => setSelectedIncident(item)}
-                            className="hover:bg-[#F8FAFC] transition-colors cursor-pointer"
+                            className="hover:bg-[#F8FAFC] dark:hover:bg-[#161F30] transition-colors cursor-pointer"
                           >
-                            <td className="py-3.5 px-4 font-mono font-bold text-[#0B4EA2]">
+                            <td className="py-3.5 px-4 font-mono font-bold text-[#0B4EA2] dark:text-[#60A5FA]">
                               {item.incidentNumber}
                             </td>
                             <td className="py-3.5 px-4 max-w-xs">
-                              <span className="font-bold text-[#0F172A] block truncate">
+                              <span className="font-bold text-[#0F172A] dark:text-[#F8FAFC] block truncate">
                                 {item.title}
                               </span>
                               <span className="text-xs text-[#64748B] block truncate mt-0.5">
-                                📍 {item.location}
+                                {item.location}
+                              </span>
+                              <span className="text-[11px] text-[#0B4EA2] font-semibold block truncate mt-0.5">
+                                {item.supportingReports?.[0]?.citizenName || "Citizen"} • {item.supportingReports?.[0]?.citizenMobile || "+91 Mobile"}
                               </span>
                             </td>
                             <td className="py-3.5 px-4">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#0F172A] text-white font-bold text-xs shadow-2xs">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#0F172A] dark:bg-[#1E293B] text-white dark:text-[#F8FAFC] border border-transparent dark:border-[#2D3748] font-bold text-xs shadow-2xs">
                                 <span>{item.complaintCount}</span>
                                 <span className="text-[10px] text-[#94A3B8]">
                                   {item.complaintCount > 1 ? "Reports" : "Report"}
@@ -1050,7 +1380,7 @@ export default function AdminDashboardPage() {
                               </span>
                             </td>
                             <td className="py-3.5 px-4">
-                              <span className="font-semibold text-[#0F172A] block truncate">
+                              <span className="font-semibold text-[#0F172A] dark:text-[#F8FAFC] block truncate">
                                 {item.authorityName}
                               </span>
                               <span className="text-xs text-[#64748B] block truncate">
@@ -1063,10 +1393,10 @@ export default function AdminDashboardPage() {
                             <td className="py-3.5 px-4">
                               <StatusBadge status={item.status} size="sm" />
                             </td>
-                            <td className="py-3.5 px-4 font-medium text-[#0F172A]">
+                            <td className="py-3.5 px-4 font-medium text-[#0F172A] dark:text-[#F8FAFC]">
                               {item.assignedOfficer ? (
-                                <span className="font-semibold text-[#0F172A] flex items-center gap-1">
-                                  <span>👤</span> {item.assignedOfficer}
+                                <span className="font-semibold text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-1">
+                                  {item.assignedOfficer}
                                 </span>
                               ) : (
                                 <span className="text-[#DC2626] bg-[#FEF2F2] px-2 py-0.5 rounded text-xs font-bold border border-[#FECACA]">
@@ -1075,16 +1405,11 @@ export default function AdminDashboardPage() {
                               )}
                             </td>
                             <td className="py-3.5 px-4 text-xs">
-                              <span
-                                className={cn(
-                                  "font-medium block",
-                                  item.isSlaBreached ? "text-[#DC2626] font-bold" : "text-[#475569]"
-                                )}
-                              >
-                                {item.slaDeadline}
+                              <span className="font-medium text-[#475569] dark:text-[#CBD5E1] block">
+                                {item.firstReportedAt || item.lastReportedAt || "Recently reported"}
                               </span>
                               <span className="text-[10px] text-[#64748B] block">
-                                Last: {item.lastReportedAt}
+                                Updated: {item.lastReportedAt}
                               </span>
                             </td>
                             <td className="py-3.5 px-4 text-right">
@@ -1094,7 +1419,7 @@ export default function AdminDashboardPage() {
                                   e.stopPropagation();
                                   setSelectedIncident(item);
                                 }}
-                                className="text-[#0B4EA2] hover:text-[#083B7A] font-bold text-xs inline-flex items-center gap-1 hover:underline p-1"
+                                className="text-[#0B4EA2] dark:text-[#60A5FA] hover:text-[#083B7A] dark:hover:text-[#93C5FD] font-bold text-xs inline-flex items-center gap-1 hover:underline p-1"
                               >
                                 <span>Inspect Clustered ({item.complaintCount})</span>
                                 <ChevronRight className="w-3.5 h-3.5" />
@@ -1110,22 +1435,15 @@ export default function AdminDashboardPage() {
             </div>
           )}
 
-          {/* ==================== TAB 3: AUTO-ROUTING PIPELINE ==================== */}
-          {activeTab === "routing" && (
-            <div className="space-y-4">
-              <AutoRoutingVisualizer />
-            </div>
-          )}
-
-          {/* ==================== TAB 4: MAP & HOTSPOTS (GOOGLE MAPS PLATFORM) ==================== */}
+          {/* ==================== TAB: MAP & HOTSPOTS ==================== */}
           {activeTab === "map" && (
             <div className="space-y-4">
               <div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] tracking-tight">
-                  Statewide Geospatial Google Map & Density Hotspots
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] dark:text-[#F8FAFC] tracking-tight">
+                  Geographic Map & Hotspots
                 </h1>
-                <p className="text-xs sm:text-sm text-[#64748B] mt-1">
-                  Centralized command map displaying all {incidents.length} Master Incidents and clustered citizen grievances across Maharashtra.
+                <p className="text-xs sm:text-sm text-[#64748B] dark:text-[#94A3B8] mt-1">
+                  Geographic distribution of {incidents.length} complaints across Kolhapur with small radius hotspot circles and complaint counts.
                 </p>
               </div>
               <ComplaintsMapView
@@ -1150,14 +1468,39 @@ export default function AdminDashboardPage() {
           )}
 
           {/* ==================== TAB 7: OFFICERS ==================== */}
+          {activeTab === "dept_ops" && isDepartmentAdmin && (
+            <DepartmentAdminView
+              currentUser={adminUser}
+              incidents={displayIncidents}
+              onRefreshDashboard={async () => {
+                if (token) {
+                  const fresh = await fetchAndSyncDatabaseComplaints(token);
+                  setIncidents([...fresh]);
+                }
+              }}
+            />
+          )}
+
+          {activeTab === "officer" && isOfficer && (
+            <OfficerWorkspaceView
+              currentUser={adminUser}
+              onRefreshDashboard={async () => {
+                if (token) {
+                  const fresh = await fetchAndSyncDatabaseComplaints(token);
+                  setIncidents([...fresh]);
+                }
+              }}
+            />
+          )}
+
           {activeTab === "officers" && (
             <div className="space-y-4">
               <div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] tracking-tight">
-                  Statewide Field Officers Directory & Roster
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] dark:text-[#F8FAFC] tracking-tight">
+                  Field Officers Roster
                 </h1>
-                <p className="text-xs sm:text-sm text-[#64748B] mt-1">
-                  Central roster of {officers.length} field officers across all divisions and municipal authorities.
+                <p className="text-xs sm:text-sm text-[#64748B] dark:text-[#94A3B8] mt-1">
+                  Directory of field officers across departments and jurisdictions ({officers.length} active).
                 </p>
               </div>
               <OfficersManagementView
@@ -1175,111 +1518,26 @@ export default function AdminDashboardPage() {
             </div>
           )}
 
-          {/* ==================== TAB 9: SLA MANAGEMENT ==================== */}
-          {activeTab === "management" && (
-            <div className="space-y-6">
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] tracking-tight">
-                  Statewide Response SLA & Escalation Governance
-                </h1>
-                <p className="text-xs sm:text-sm text-[#64748B] mt-1">
-                  Configure automated response time ceilings and cross-division escalation policies.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white p-5 rounded-xl border border-[#E2E8F0] shadow-xs space-y-4">
-                  <h4 className="font-bold text-sm sm:text-base text-[#0F172A] flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-[#0B4EA2]" />
-                    <span>Response SLA Thresholds by Severity</span>
-                  </h4>
-                  <div className="space-y-3 text-xs">
-                    <div className="flex items-center justify-between p-2.5 rounded-lg border border-[#FECACA] bg-[#FEF2F2]">
-                      <div>
-                        <strong className="text-[#DC2626]">VERY HIGH (Critical Public Safety)</strong>
-                        <p className="text-[#64748B]">Immediate bio-waste, pipeline rupture</p>
-                      </div>
-                      <span className="font-bold text-[#DC2626] font-mono">4 Hours SLA</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2.5 rounded-lg border border-[#FDE68A] bg-[#FFF7E6]">
-                      <div>
-                        <strong className="text-[#B45309]">HIGH (Urgent Civil Disruption)</strong>
-                        <p className="text-[#64748B]">Road potholes, arterial streetlights</p>
-                      </div>
-                      <span className="font-bold text-[#B45309] font-mono">12 Hours SLA</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2.5 rounded-lg border border-[#BFDBFE] bg-[#EAF2FF]">
-                      <div>
-                        <strong className="text-[#0B4EA2]">MEDIUM</strong>
-                        <p className="text-[#64748B]">Drain cleaning, secondary dumpsters</p>
-                      </div>
-                      <span className="font-bold text-[#0B4EA2] font-mono">24 Hours SLA</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2.5 rounded-lg border border-[#BBF7D0] bg-[#ECFDF3]">
-                      <div>
-                        <strong className="text-[#15803D]">LOW</strong>
-                        <p className="text-[#64748B]">General maintenance queries</p>
-                      </div>
-                      <span className="font-bold text-[#15803D] font-mono">48 Hours SLA</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white p-5 rounded-xl border border-[#E2E8F0] shadow-xs space-y-4">
-                  <h4 className="font-bold text-sm sm:text-base text-[#0F172A] flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-[#5B21B6]" />
-                    <span>Hierarchical Escalation Watchdog</span>
-                  </h4>
-                  <div className="space-y-2.5 text-xs">
-                    <div className="p-3 rounded-lg border border-[#E2E8F0] space-y-1">
-                      <strong className="text-[#0F172A] block">Level 1 Escalation: Officer → Authority Head</strong>
-                      <span className="text-[#64748B]">
-                        If unassigned for &gt; 2 hours or no site visit within SLA ceiling, escalate to Municipal Commissioner.
-                      </span>
-                    </div>
-
-                    <div className="p-3 rounded-lg border border-[#E2E8F0] space-y-1">
-                      <strong className="text-[#0F172A] block">Level 2 Escalation: Authority → Division Commissioner</strong>
-                      <span className="text-[#64748B]">
-                        If resolution fails past 2x SLA limit, flagged to Divisional Commissioner console.
-                      </span>
-                    </div>
-
-                    <div className="p-3 rounded-lg border border-[#E2E8F0] space-y-1">
-                      <strong className="text-[#0F172A] block">Level 3 Escalation: State Secretary Audit</strong>
-                      <span className="text-[#64748B]">
-                        Recurring hotspot breaches flagged in monthly Cabinet Redressal Index.
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ==================== TAB 10: SETTINGS ==================== */}
+          {/* ==================== TAB 9: SETTINGS ==================== */}
           {activeTab === "settings" && (
             <div className="space-y-6">
               <div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] tracking-tight">
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] dark:text-[#F8FAFC] tracking-tight">
                   Administrative Profile & Credentials
                 </h1>
-                <p className="text-xs sm:text-sm text-[#64748B] mt-1">
+                <p className="text-xs sm:text-sm text-[#64748B] dark:text-[#94A3B8] mt-1">
                   Verified administrator identity loaded from backend security clearance.
                 </p>
               </div>
 
-              <div className="bg-white p-6 rounded-xl border border-[#E2E8F0] shadow-xs max-w-2xl space-y-5">
-                <div className="flex items-center gap-4 border-b border-[#E2E8F0] pb-4">
+              <div className="bg-white dark:bg-[#111827] p-6 rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-xs max-w-2xl space-y-5 transition-colors">
+                <div className="flex items-center gap-4 border-b border-[#E2E8F0] dark:border-[#1E293B] pb-4">
                   <div className="w-14 h-14 rounded-2xl bg-[#083B7A] flex items-center justify-center text-white text-xl font-bold shadow-xs">
                     {adminUser.badgeId ? adminUser.badgeId.slice(0, 3) : "ADM"}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-extrabold text-lg text-[#0F172A]">
+                      <h3 className="font-extrabold text-lg text-[#0F172A] dark:text-[#F8FAFC]">
                         {adminUser.name || "Rajesh Sharma"}
                       </h3>
                       <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#ECFDF3] text-[#15803D] border border-[#BBF7D0]">
@@ -1296,25 +1554,25 @@ export default function AdminDashboardPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
+                  <div className="p-3 rounded-lg bg-[#F8FAFC] dark:bg-[#161F30] border border-[#E2E8F0] dark:border-[#1E293B]">
                     <span className="text-[#64748B] block">Security Badge ID:</span>
-                    <span className="font-mono font-bold text-[#0F172A] text-sm">
+                    <span className="font-mono font-bold text-[#0F172A] dark:text-[#F8FAFC] text-sm">
                       {adminUser.badgeId || "ADM-HQ-401"}
                     </span>
                   </div>
-                  <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
+                  <div className="p-3 rounded-lg bg-[#F8FAFC] dark:bg-[#161F30] border border-[#E2E8F0] dark:border-[#1E293B]">
                     <span className="text-[#64748B] block">Verified Mobile Number:</span>
-                    <span className="font-mono font-bold text-[#0F172A] text-sm">
+                    <span className="font-mono font-bold text-[#0F172A] dark:text-[#F8FAFC] text-sm">
                       {adminUser.mobileNumber || "+91 98220 12345"}
                     </span>
                   </div>
-                  <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
+                  <div className="p-3 rounded-lg bg-[#F8FAFC] dark:bg-[#161F30] border border-[#E2E8F0] dark:border-[#1E293B]">
                     <span className="text-[#64748B] block">Administrative Role:</span>
                     <span className="font-bold text-[#0B4EA2] text-sm">
                       {adminUser.role || "ADMIN"} (State Command)
                     </span>
                   </div>
-                  <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
+                  <div className="p-3 rounded-lg bg-[#F8FAFC] dark:bg-[#161F30] border border-[#E2E8F0] dark:border-[#1E293B]">
                     <span className="text-[#64748B] block">Jurisdiction Scope:</span>
                     <span className="font-bold text-[#15803D] text-sm">
                       All Divisions in Maharashtra
@@ -1322,12 +1580,12 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-[#E2E8F0] flex items-center justify-between">
+                <div className="pt-4 border-t border-[#E2E8F0] dark:border-[#1E293B] flex items-center justify-between">
                   <Link
-                    href="/auth/citizenlogin"
+                    href={ROUTES.HOME}
                     className="text-xs font-semibold text-[#0B4EA2] hover:underline"
                   >
-                    Open CivicResolve Citizen Portal →
+                    Open CivicResolve Home →
                   </Link>
                   <Button
                     variant="danger"
@@ -1361,6 +1619,10 @@ export default function AdminDashboardPage() {
         onClose={() => setSelectedIncident(null)}
         onReassignOfficer={handleReassignOfficer}
         onUpdateStatus={handleUpdateStatus}
+        onOverridePriority={isOfficer ? undefined : handleOverridePriority}
+        userRole={adminUser.role}
+        departments={availableDepartments.map((d) => ({ id: d.id, name: d.name }))}
+        onReassignDepartment={isSuperAdmin ? handleReassignDepartment : undefined}
       />
     </div>
   );

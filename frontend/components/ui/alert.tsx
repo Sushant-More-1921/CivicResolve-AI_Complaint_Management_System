@@ -17,28 +17,28 @@ export function Alert({
 }: AlertProps) {
   const configs = {
     danger: {
-      bg: "bg-[#FEF2F2]",
-      border: "border-[#FECACA]",
-      text: "text-[#DC2626]",
-      icon: <AlertCircle className="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" />,
+      bg: "bg-[#FEF2F2] dark:bg-[#7F1D1D]/20",
+      border: "border-[#FECACA] dark:border-[#DC2626]/40",
+      text: "text-[#DC2626] dark:text-[#F87171]",
+      icon: <AlertCircle className="w-5 h-5 text-[#DC2626] dark:text-[#F87171] shrink-0 mt-0.5" />,
     },
     warning: {
-      bg: "bg-[#FFF7E6]",
-      border: "border-[#FDE68A]",
-      text: "text-[#B45309]",
-      icon: <AlertTriangle className="w-5 h-5 text-[#F59E0B] shrink-0 mt-0.5" />,
+      bg: "bg-[#FFF7E6] dark:bg-[#78350F]/20",
+      border: "border-[#FDE68A] dark:border-[#F59E0B]/40",
+      text: "text-[#B45309] dark:text-[#FBBF24]",
+      icon: <AlertTriangle className="w-5 h-5 text-[#F59E0B] dark:text-[#FBBF24] shrink-0 mt-0.5" />,
     },
     success: {
-      bg: "bg-[#ECFDF3]",
-      border: "border-[#BBF7D0]",
-      text: "text-[#15803D]",
-      icon: <CheckCircle2 className="w-5 h-5 text-[#16A34A] shrink-0 mt-0.5" />,
+      bg: "bg-[#ECFDF3] dark:bg-[#064E3B]/20",
+      border: "border-[#BBF7D0] dark:border-[#10B981]/40",
+      text: "text-[#15803D] dark:text-[#34D399]",
+      icon: <CheckCircle2 className="w-5 h-5 text-[#16A34A] dark:text-[#34D399] shrink-0 mt-0.5" />,
     },
     info: {
-      bg: "bg-[#EAF2FF]",
-      border: "border-[#BFDBFE]",
-      text: "text-[#0B4EA2]",
-      icon: <Info className="w-5 h-5 text-[#0B4EA2] shrink-0 mt-0.5" />,
+      bg: "bg-[#EAF2FF] dark:bg-[#1E3A8A]/20",
+      border: "border-[#BFDBFE] dark:border-[#3B82F6]/40",
+      text: "text-[#0B4EA2] dark:text-[#60A5FA]",
+      icon: <Info className="w-5 h-5 text-[#0B4EA2] dark:text-[#60A5FA] shrink-0 mt-0.5" />,
     },
   };
 

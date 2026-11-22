@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary: #0B4EA2;
   --color-primary-dark: #083B7A;
@@ -25,16 +27,16 @@
   --color-danger-light: #FEF2F2;
   --color-danger-border: #FECACA;
 
-  --color-background: #F8FAFC;
-  --color-surface: #FFFFFF;
-  --color-surface-secondary: #F1F5F9;
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-secondary: var(--surface-secondary);
 
-  --color-text-primary: #0F172A;
-  --color-text-secondary: #475569;
-  --color-text-muted: #64748B;
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
 
-  --color-border-subtle: #E2E8F0;
-  --color-border-dark: #CBD5E1;
+  --color-border-subtle: var(--border);
+  --color-border-dark: var(--border-dark);
 }
 
 :root {
@@ -74,9 +76,66 @@
   --border-dark: #CBD5E1;
 }
 
+.dark {
+  --primary: #3B82F6;
+  --primary-dark: #2563EB;
+  --primary-light: #1E293B;
+
+  --ai: #8B5CF6;
+  --ai-light: #2E1065;
+  --ai-border: #4C1D95;
+
+  --warning: #FBBF24;
+  --warning-light: #451A03;
+  --warning-border: #78350F;
+
+  --success: #22C55E;
+  --success-light: #052E16;
+  --success-border: #14532D;
+
+  --teal: #14B8A6;
+  --teal-light: #042F2E;
+  --teal-border: #134E4A;
+
+  --danger: #EF4444;
+  --danger-light: #450A0A;
+  --danger-border: #7F1D1D;
+
+  --background: #0B0F17;
+  --surface: #111827;
+  --surface-secondary: #161F30;
+
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+
+  --border: #1E293B;
+  --border-dark: #2D3748;
+}
+
 body {
   background-color: var(--background);
   color: var(--text-primary);
-  font-family: var(--font-inter, system-ui, -apple-system, sans-serif);
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Custom scrollbars for dark mode */
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #0B0F17;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #1E293B;
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #334155;
 }

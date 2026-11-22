@@ -1,0 +1,460 @@
+{
+  "scenarios_passed": 12,
+  "scenarios_total": 12,
+  "duplicate_detection_passed": true,
+  "all_passed": true,
+  "results": [
+    {
+      "id": 1,
+      "name": "Matching garbage image + Garbage category + description",
+      "image": "gbin_0003.jpg",
+      "is_synthetic_fixture": false,
+      "allowed_statuses": [
+        "VALID"
+      ],
+      "actual_status": "VALID",
+      "passed": true,
+      "result": {
+        "status": "VALID",
+        "category_match": true,
+        "description_match": true,
+        "image_quality": "good",
+        "predicted_category": "garbage",
+        "category_confidence": 0.9301,
+        "description_match_score": 0.6155,
+        "reason": "Image quality is clear and visual content aligns with category and description.",
+        "requires_manual_review": false,
+        "duplicate_detected": false,
+        "perceptual_hash": "78290f1be1e5ec5f",
+        "model_version": "civic-imgval-clip-v1.0.0",
+        "quality_metrics": {
+          "width": 640,
+          "height": 640,
+          "laplacian_var": 1459.68,
+          "tenengrad": 27866.6,
+          "mean_luma": 98.03,
+          "std_luma": 69.49,
+          "dark_ratio": 0.1596,
+          "bright_ratio": 0.0047,
+          "entropy": 5.734
+        }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Matching pothole image + Road category + description",
+      "image": "pcls_low_0000.jpg",
+      "is_synthetic_fixture": false,
+      "allowed_statuses": [
+        "VALID"
+      ],
+      "actual_status": "VALID",
+      "passed": true,
+      "result": {
+        "status": "VALID",
+        "category_match": true,
+        "description_match": true,
+        "image_quality": "good",
+        "predicted_category": "road_damage",
+        "category_confidence": 0.8678,
+        "description_match_score": 0.374,
+        "reason": "Image quality is clear and visual content aligns with category and description.",
+        "requires_manual_review": false,
+        "duplicate_detected": false,
+        "perceptual_hash": "632130b8fcf4f6da",
+        "model_version": "civic-imgval-clip-v1.0.0",
+        "quality_metrics": {
+          "width": 4032,
+          "height": 3024,
+          "laplacian_var": 4274.43,
+          "tenengrad": 20868.52,
+          "mean_luma": 144.65,
+          "std_luma": 46.17,
+          "dark_ratio": 0.0031,
+          "bright_ratio": 0.0067,
+          "entropy": 5.463
+        }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Matching drainage image + Drainage category + description",
+      "image": "wm_open_sewage_drain_wm_13950880.jpg",
+      "is_synthetic_fixture": false,
+      "allowed_statuses": [
+        "NEEDS_REVIEW",
+        "VALID"
+      ],
+      "actual_status": "VALID",
+      "passed": true,
+      "result": {
+        "status": "VALID",
+        "category_match": true,
+        "description_match": true,
+        "image_quality": "good",
+        "predicted_category": "drainage",
+        "category_confidence": 0.988,
+        "description_match_score": 0.4131,
+        "reason": "Image quality is clear and visual content aligns with category and description.",
+        "requires_manual_review": false,
+        "duplicate_detected": false,
+        "perceptual_hash": "ccc8188849591888",
+        "model_version": "civic-imgval-clip-v1.0.0",
+        "quality_metrics": {
+          "width": 640,
+          "height": 479,
+          "laplacian_var": 2370.45,
+          "tenengrad": 17002.88,
+          "mean_luma": 107.84,
+          "std_luma": 55.11,
+          "dark_ratio": 0.0329,
+          "bright_ratio": 0.012,
+          "entropy": 5.709
+        }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Matching water pollution image + Water Supply category + description",
+      "image": "wm_water_pollution_river_plasti_wm_63583756.jpg",
+      "is_synthetic_fixture": false,
+      "allowed_statuses": [
+        "NEEDS_REVIEW",
+        "VALID"
+      ],
+      "actual_status": "VALID",
+      "passed": true,
+      "result": {
+        "status": "VALID",
+        "category_match": true,
+        "description_match": true,
+        "image_quality": "good",
+        "predicted_category": "water_pollution",
+        "category_confidence": 0.9118,
+        "description_match_score": 0.9062,
+        "reason": "Image quality is clear and visual content aligns with category and description.",
+        "requires_manual_review": false,
+        "duplicate_detected": false,
+        "perceptual_hash": "e0e0f02030188e92",
+        "model_version": "civic-imgval-clip-v1.0.0",
+        "quality_metrics": {
+          "width": 960,
+          "height": 636,
+          "laplacian_var": 615.77,
+          "tenengrad": 3837.56,
+          "mean_luma": 88.29,
+          "std_luma": 71.5,
+          "dark_ratio": 0.0922,
+          "bright_ratio": 0.0062,
+          "entropy": 5.475
+        }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Matching sanitation image + Sanitation category + multilingual Hindi description",
+      "image": "wm_dirty_public_toilet_wm_112863292.jpg",
+      "is_synthetic_fixture": false,
+      "allowed_statuses": [
+        "NEEDS_REVIEW",
+        "VALID"
+      ],
+      "actual_status": "VALID",
+      "passed": true,
+      "result": {
+        "status": "VALID",
+        "category_match": true,
+        "description_match": true,
+        "image_quality": "good",
+        "predicted_category": "sanitation",
+        "category_confidence": 0.9927,
+        "description_match_score": 0.8219,
+        "reason": "Image quality is clear and visual content aligns with category and description.",
+        "requires_manual_review": false,
+        "duplicate_detected": false,
+        "perceptual_hash": "60cca0cc94dc6086",
+        "model_version": "civic-imgval-clip-v1.0.0",
+        "quality_metrics": {
+          "width": 587,
+          "height": 1042,
+          "laplacian_var": 224.64,
+          "tenengrad": 4272.56,
+          "mean_luma": 144.5,
+          "std_luma": 55.49,
+          "dark_ratio": 0.0085,
+          "bright_ratio": 0.0117,
+          "entropy": 5.701
+        }
+      }
+    },
+    {
+      "id": 6,
+      "name": "Category mismatch: Garbage image uploaded under Road Damage / Potholes",
+      "image": "gbin_0003.jpg",
+      "is_synthetic_fixture": false,
+      "allowed_statuses": [
+        "INVALID",
+        "NEEDS_REVIEW"
+      ],
+      "actual_status": "INVALID",
+      "passed": true,
+      "result": {
+        "status": "INVALID",
+        "category_match": false,
+        "description_match": false,
+        "image_quality": "good",
+        "predicted_category": "garbage",
+        "category_confidence": 0.9301,
+        "description_match_score": 0.0559,
+        "reason": "Photo appears to show 'Garbage & Waste' instead of the selected complaint category.",
+        "requires_manual_review": false,
+        "duplicate_detected": false,
+        "perceptual_hash": "78290f1be1e5ec5f",
+        "model_version": "civic-imgval-clip-v1.0.0",
+        "quality_metrics": {
+          "width": 640,
+          "height": 640,
+          "laplacian_var": 1459.68,
+          "tenengrad": 27866.6,
+          "mean_luma": 98.03,
+          "std_luma": 69.49,
+          "dark_ratio": 0.1596,
+          "bright_ratio": 0.0047,
+          "entropy": 5.734
+        }
+      }
+    },
+    {
+      "id": 7,
+      "name": "Unrelated photo / selfie or clean park uploaded as Garbage complaint",
+      "image": "wm_green_public_park_bench_lawn_wm_113499948.jpg",
+      "is_synthetic_fixture": false,
+      "allowed_statuses": [
+        "INVALID",
+        "NEEDS_REVIEW"
+      ],
+      "actual_status": "INVALID",
+      "passed": true,
+      "result": {
+        "status": "INVALID",
+        "category_match": false,
+        "description_match": false,
+        "image_quality": "good",
+        "predicted_category": "unrelated",
+        "category_confidence": 0.9669,
+        "description_match_score": 0.031,
+        "reason": "Uploaded image does not depict a municipal civic issue (appears unrelated, personal, clean scene, or screenshot).",
+        "requires_manual_review": false,
+        "duplicate_detected": false,
+        "perceptual_hash": "81c1b3e79c84c5d1",
+        "model_version": "civic-imgval-clip-v1.0.0",
+        "quality_metrics": {
+          "width": 960,
+          "height": 639,
+          "laplacian_var": 8322.44,
+          "tenengrad": 28755.2,
+          "mean_luma": 70.07,
+          "std_luma": 57.19,
+          "dark_ratio": 0.1901,
+          "bright_ratio": 0.0116,
+          "entropy": 5.513
+        }
+      }
+    },
+    {
+      "id": 8,
+      "name": "Clean normal road claiming broken pothole (description contradiction)",
+      "image": "clean_normal_road_0147.jpg",
+      "is_synthetic_fixture": false,
+      "allowed_statuses": [
+        "INVALID",
+        "NEEDS_REVIEW"
+      ],
+      "actual_status": "INVALID",
+      "passed": true,
+      "result": {
+        "status": "INVALID",
+        "category_match": false,
+        "description_match": false,
+        "image_quality": "good",
+        "predicted_category": "unrelated",
+        "category_confidence": 0.955,
+        "description_match_score": 0.2707,
+        "reason": "Uploaded image does not depict a municipal civic issue (appears unrelated, personal, clean scene, or screenshot).",
+        "requires_manual_review": false,
+        "duplicate_detected": false,
+        "perceptual_hash": "f272f8bfdfd3d7f7",
+        "model_version": "civic-imgval-clip-v1.0.0",
+        "quality_metrics": {
+          "width": 4032,
+          "height": 3024,
+          "laplacian_var": 1075.51,
+          "tenengrad": 3820.06,
+          "mean_luma": 158.03,
+          "std_luma": 18.31,
+          "dark_ratio": 0.0,
+          "bright_ratio": 0.0004,
+          "entropy": 3.871
+        }
+      }
+    },
+    {
+      "id": 9,
+      "name": "Severely blurred image quality rejection (isolated synthetic fixture)",
+      "image": "quality_severely_blurred.jpg",
+      "is_synthetic_fixture": true,
+      "allowed_statuses": [
+        "INVALID"
+      ],
+      "actual_status": "INVALID",
+      "passed": true,
+      "result": {
+        "status": "INVALID",
+        "category_match": false,
+        "description_match": false,
+        "image_quality": "low_quality",
+        "predicted_category": "low_quality",
+        "category_confidence": 0.99,
+        "description_match_score": 0.0,
+        "reason": "Image is excessively blurry. Please upload a sharper, focused photo.",
+        "requires_manual_review": false,
+        "duplicate_detected": false,
+        "perceptual_hash": "00c0c3c3c3c3c304",
+        "model_version": "civic-imgval-clip-v1.0.0",
+        "quality_metrics": {
+          "width": 480,
+          "height": 320,
+          "laplacian_var": 0.62,
+          "tenengrad": 8.57,
+          "mean_luma": 109.09,
+          "std_luma": 14.18,
+          "dark_ratio": 0.0,
+          "bright_ratio": 0.0,
+          "entropy": 3.013
+        }
+      }
+    },
+    {
+      "id": 10,
+      "name": "Extremely dark image quality rejection (isolated synthetic fixture)",
+      "image": "quality_extremely_dark.jpg",
+      "is_synthetic_fixture": true,
+      "allowed_statuses": [
+        "INVALID"
+      ],
+      "actual_status": "INVALID",
+      "passed": true,
+      "result": {
+        "status": "INVALID",
+        "category_match": false,
+        "description_match": false,
+        "image_quality": "low_quality",
+        "predicted_category": "low_quality",
+        "category_confidence": 0.99,
+        "description_match_score": 0.0,
+        "reason": "Image is too dark to clearly see the reported civic issue. Image lacks clear visual detail (blank or flat frame).",
+        "requires_manual_review": false,
+        "duplicate_detected": false,
+        "perceptual_hash": "04080a214a408112",
+        "model_version": "civic-imgval-clip-v1.0.0",
+        "quality_metrics": {
+          "width": 480,
+          "height": 320,
+          "laplacian_var": 28.51,
+          "tenengrad": 122.18,
+          "mean_luma": 5.48,
+          "std_luma": 1.79,
+          "dark_ratio": 1.0,
+          "bright_ratio": 0.0,
+          "entropy": 1.065
+        }
+      }
+    },
+    {
+      "id": 11,
+      "name": "Corrupted / unreadable image bytes (isolated synthetic fixture)",
+      "image": "corrupted_evidence.jpg",
+      "is_synthetic_fixture": true,
+      "allowed_statuses": [
+        "INVALID"
+      ],
+      "actual_status": "INVALID",
+      "passed": true,
+      "result": {
+        "status": "INVALID",
+        "category_match": false,
+        "description_match": false,
+        "image_quality": "low_quality",
+        "predicted_category": "low_quality",
+        "category_confidence": 0.99,
+        "description_match_score": 0.0,
+        "reason": "Uploaded image appears corrupted or unreadable. Please capture a fresh photo.",
+        "requires_manual_review": false,
+        "duplicate_detected": false,
+        "perceptual_hash": null,
+        "model_version": "civic-imgval-clip-v1.0.0"
+      }
+    },
+    {
+      "id": 12,
+      "name": "Mobile UI screenshot trap & perceptual duplicate detection",
+      "image": "adversarial_mobile_ui_mockup.png",
+      "is_synthetic_fixture": true,
+      "allowed_statuses": [
+        "INVALID"
+      ],
+      "actual_status": "INVALID",
+      "passed": true,
+      "result": {
+        "status": "INVALID",
+        "category_match": false,
+        "description_match": false,
+        "image_quality": "low_quality",
+        "predicted_category": "low_quality",
+        "category_confidence": 0.99,
+        "description_match_score": 0.0,
+        "reason": "Image is overly bright or washed out to inspect the issue. Image lacks clear visual detail (blank or flat frame).",
+        "requires_manual_review": false,
+        "duplicate_detected": false,
+        "perceptual_hash": "8070606070607020",
+        "model_version": "civic-imgval-clip-v1.0.0",
+        "quality_metrics": {
+          "width": 480,
+          "height": 720,
+          "laplacian_var": 919.14,
+          "tenengrad": 7111.27,
+          "mean_luma": 226.94,
+          "std_luma": 69.84,
+          "dark_ratio": 0.0,
+          "bright_ratio": 0.8514,
+          "entropy": 1.674
+        }
+      }
+    }
+  ],
+  "duplicate_check_result": {
+    "status": "NEEDS_REVIEW",
+    "category_match": true,
+    "description_match": true,
+    "image_quality": "good",
+    "predicted_category": "garbage",
+    "category_confidence": 0.9301,
+    "description_match_score": 0.6155,
+    "reason": "Duplicate or nearly identical evidence image detected against an existing submission; flagged for officer review.",
+    "requires_manual_review": true,
+    "duplicate_detected": true,
+    "perceptual_hash": "78290f1be1e5ec5f",
+    "model_version": "civic-imgval-clip-v1.0.0",
+    "quality_metrics": {
+      "width": 640,
+      "height": 640,
+      "laplacian_var": 1459.68,
+      "tenengrad": 27866.6,
+      "mean_luma": 98.03,
+      "std_luma": 69.49,
+      "dark_ratio": 0.1596,
+      "bright_ratio": 0.0047,
+      "entropy": 5.734
+    }
+  }
+}

@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Shield,
   UserCheck,
   CheckCircle2,
   AlertCircle,
@@ -17,7 +16,7 @@ import { registerCitizenApi } from "@/lib/api/auth";
 import { isValidIndianMobile } from "@/lib/validations/auth";
 import { INITIAL_DIVISIONS, INITIAL_AUTHORITIES } from "@/lib/api/hierarchy";
 import ROUTES from "@/config/routes";
-import { LanguageSwitcher } from "@/components/common/language-switcher";
+import { GlobalHeader } from "@/components/common/global-header";
 import { useLanguage } from "@/context/language-context";
 
 export default function RegisterPage() {
@@ -62,7 +61,7 @@ export default function RegisterPage() {
       if (response.success) {
         setSuccessMessage("Citizen profile registered successfully! Redirecting to OTP verification...");
         setTimeout(() => {
-          router.push(`${ROUTES.AUTH.CITIZEN_LOGIN}?mobile=${cleanMobile}`);
+          router.push(`${ROUTES.AUTH.LOGIN}?mobile=${cleanMobile}`);
         }, 1200);
       } else {
         setErrorMessage(response.message || "Registration failed. Please try again.");
@@ -76,64 +75,47 @@ export default function RegisterPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#F8FAFC] flex flex-col justify-between selection:bg-[#EAF2FF] selection:text-[#0B4EA2]">
+    <main className="min-h-screen bg-[#F8FAFC] dark:bg-[#0B0F17] flex flex-col justify-between selection:bg-[#EAF2FF] selection:text-[#0B4EA2] transition-colors">
       {/* Top Navbar */}
-      <header className="w-full bg-white border-b border-[#E2E8F0] py-3.5 px-4 sm:px-8 sticky top-0 z-30 shadow-xs">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
-          <Link href={ROUTES.HOME} className="flex items-center gap-3 shrink-0">
-            <div className="w-9 h-9 rounded-lg bg-[#0B4EA2] flex items-center justify-center text-white shadow-xs">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <span className="block text-sm sm:text-base font-bold text-[#0F172A] leading-tight">
-                {t("brandName")}
-              </span>
-              <span className="block text-[11px] font-medium text-[#64748B]">
-                {t("registrationSubtitle")}
-              </span>
-            </div>
+      <GlobalHeader
+        subtitle={t("registrationSubtitle")}
+        actions={
+          <Link
+            href={ROUTES.AUTH.LOGIN}
+            className="text-xs text-[#0B4EA2] dark:text-[#60A5FA] font-semibold hover:underline"
+          >
+            {t("alreadyRegisteredLogin")}
           </Link>
-
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end text-xs">
-            <LanguageSwitcher />
-
-            <Link
-              href={ROUTES.AUTH.CITIZEN_LOGIN}
-              className="text-[#0B4EA2] font-semibold hover:underline"
-            >
-              {t("alreadyRegisteredLogin")}
-            </Link>
-          </div>
-        </div>
-      </header>
+        }
+      />
 
       {/* Main Form Workspace */}
       <div className="flex-1 flex items-center justify-center py-10 px-4 sm:px-6">
         <div className="w-full max-w-lg space-y-6">
           {/* Header Title */}
           <div className="text-center space-y-2">
-            <div className="w-14 h-14 rounded-2xl bg-[#0B4EA2] text-white flex items-center justify-center mx-auto shadow-sm ring-4 ring-[#EAF2FF]">
+            <div className="w-14 h-14 rounded-2xl bg-[#0B4EA2] dark:bg-[#1E3A8A] text-white flex items-center justify-center mx-auto shadow-sm ring-4 ring-[#EAF2FF] dark:ring-[#1E293B]">
               <UserCheck className="w-7 h-7" />
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] dark:text-[#F8FAFC] tracking-tight">
               Create CivicResolve Account
             </h1>
-            <p className="text-xs sm:text-sm text-[#64748B] max-w-sm mx-auto">
+            <p className="text-xs sm:text-sm text-[#64748B] dark:text-[#94A3B8] max-w-sm mx-auto">
               Register once to lodge civic complaints, track ward resolution progress, and receive official SMS updates.
             </p>
           </div>
 
           {/* Form Card */}
-          <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm p-6 sm:p-8 space-y-5">
+          <div className="bg-white dark:bg-[#111827] rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] shadow-sm p-6 sm:p-8 space-y-5 transition-colors">
             {errorMessage && (
-              <div className="p-3.5 rounded-xl bg-[#FEF2F2] border border-[#FECACA] text-[#DC2626] text-xs font-medium flex items-center gap-2">
+              <div className="p-3.5 rounded-xl bg-[#FEF2F2] dark:bg-[#7F1D1D]/20 border border-[#FECACA] dark:border-[#DC2626]/40 text-[#DC2626] dark:text-[#F87171] text-xs font-medium flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{errorMessage}</span>
               </div>
             )}
 
             {successMessage && (
-              <div className="p-3.5 rounded-xl bg-[#ECFDF3] border border-[#BBF7D0] text-[#15803D] text-xs font-medium flex items-center gap-2">
+              <div className="p-3.5 rounded-xl bg-[#ECFDF3] dark:bg-[#064E3B]/20 border border-[#BBF7D0] dark:border-[#10B981]/40 text-[#15803D] dark:text-[#34D399] text-xs font-medium flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>{successMessage}</span>
               </div>
@@ -142,29 +124,29 @@ export default function RegisterPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Full Name */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#0F172A] mb-1.5">
-                  Full Name (as per ID) <span className="text-[#DC2626]">*</span>
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#0F172A] dark:text-[#F8FAFC] mb-1.5">
+                  Full Name (as per ID) <span className="text-[#DC2626] dark:text-[#F87171]">*</span>
                 </label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <User className="w-4 h-4 text-[#94A3B8] dark:text-[#64748B] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     required
                     placeholder="e.g. Citizen Name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="w-full h-11 pl-10 pr-3 rounded-xl border border-[#CBD5E1] text-xs sm:text-sm text-[#0F172A] focus:outline-none focus:border-[#0B4EA2] focus:ring-2 focus:ring-[#EAF2FF]"
+                    className="w-full h-11 pl-10 pr-3 rounded-xl border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-xs sm:text-sm text-[#0F172A] dark:text-[#F8FAFC] placeholder:text-[#94A3B8] dark:placeholder:text-[#64748B] focus:outline-none focus:border-[#0B4EA2] dark:focus:border-[#3B82F6] focus:ring-2 focus:ring-[#EAF2FF] dark:focus:ring-[#3B82F6]/20 transition-all"
                   />
                 </div>
               </div>
 
               {/* Mobile Number */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#0F172A] mb-1.5">
-                  Indian Mobile Number <span className="text-[#DC2626]">*</span>
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#0F172A] dark:text-[#F8FAFC] mb-1.5">
+                  Indian Mobile Number <span className="text-[#DC2626] dark:text-[#F87171]">*</span>
                 </label>
                 <div className="relative flex items-center">
-                  <span className="absolute left-3.5 text-xs font-bold text-[#475569] font-mono">
+                  <span className="absolute left-3.5 text-xs font-bold text-[#475569] dark:text-[#94A3B8] font-mono">
                     +91
                   </span>
                   <input
@@ -174,10 +156,10 @@ export default function RegisterPage() {
                     placeholder="98765 43210"
                     value={mobileNumber}
                     onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ""))}
-                    className="w-full h-11 pl-12 pr-3 rounded-xl border border-[#CBD5E1] text-xs sm:text-sm font-mono font-medium text-[#0F172A] focus:outline-none focus:border-[#0B4EA2] focus:ring-2 focus:ring-[#EAF2FF]"
+                    className="w-full h-11 pl-12 pr-3 rounded-xl border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-xs sm:text-sm font-mono font-medium text-[#0F172A] dark:text-[#F8FAFC] placeholder:text-[#94A3B8] dark:placeholder:text-[#64748B] focus:outline-none focus:border-[#0B4EA2] dark:focus:border-[#3B82F6] focus:ring-2 focus:ring-[#EAF2FF] dark:focus:ring-[#3B82F6]/20 transition-all"
                   />
                 </div>
-                <span className="text-[11px] text-[#64748B] mt-1 block">
+                <span className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1 block">
                   You will receive 6-digit verification codes on this mobile number.
                 </span>
               </div>
@@ -185,16 +167,16 @@ export default function RegisterPage() {
               {/* Division & Municipality */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
-                  <label className="text-[11px] font-semibold text-[#64748B] block mb-1">
+                  <label className="text-[11px] font-semibold text-[#64748B] dark:text-[#94A3B8] block mb-1">
                     Administrative Division
                   </label>
                   <select
                     value={divisionId}
                     onChange={(e) => setDivisionId(e.target.value)}
-                    className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+                    className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-xs text-[#0F172A] dark:text-[#F8FAFC] focus:outline-none focus:border-[#0B4EA2] dark:focus:border-[#3B82F6]"
                   >
                     {INITIAL_DIVISIONS.map((d) => (
-                      <option key={d.id} value={d.id}>
+                      <option key={d.id} value={d.id} className="dark:bg-[#161F30] dark:text-[#F8FAFC]">
                         {d.name}
                       </option>
                     ))}
@@ -202,16 +184,16 @@ export default function RegisterPage() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-semibold text-[#64748B] block mb-1">
+                  <label className="text-[11px] font-semibold text-[#64748B] dark:text-[#94A3B8] block mb-1">
                     Municipal Corporation
                   </label>
                   <select
                     value={authorityId}
                     onChange={(e) => setAuthorityId(e.target.value)}
-                    className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+                    className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-xs text-[#0F172A] dark:text-[#F8FAFC] focus:outline-none focus:border-[#0B4EA2] dark:focus:border-[#3B82F6]"
                   >
                     {INITIAL_AUTHORITIES.map((a) => (
-                      <option key={a.id} value={a.id}>
+                      <option key={a.id} value={a.id} className="dark:bg-[#161F30] dark:text-[#F8FAFC]">
                         {a.name}
                       </option>
                     ))}
@@ -221,29 +203,29 @@ export default function RegisterPage() {
 
               {/* Ward / Area */}
               <div>
-                <label className="text-[11px] font-semibold text-[#64748B] block mb-1">
-                  Residential Ward / Area (Optional)
+                <label className="text-[11px] font-semibold text-[#64748B] dark:text-[#94A3B8] block mb-1">
+                  Residential Ward / Area
                 </label>
                 <div className="relative">
-                  <MapPin className="w-4 h-4 text-[#94A3B8] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <MapPin className="w-4 h-4 text-[#94A3B8] dark:text-[#64748B] absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     placeholder="e.g. Ward 12, Tarabai Park, Kolhapur North"
                     value={residentialWard}
                     onChange={(e) => setResidentialWard(e.target.value)}
-                    className="w-full h-10 pl-9 pr-3 rounded-lg border border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+                    className="w-full h-10 pl-9 pr-3 rounded-lg border border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#161F30] text-xs text-[#0F172A] dark:text-[#F8FAFC] placeholder:text-[#94A3B8] dark:placeholder:text-[#64748B] focus:outline-none focus:border-[#0B4EA2] dark:focus:border-[#3B82F6]"
                   />
                 </div>
               </div>
 
               {/* Terms Checkbox */}
-              <div className="flex items-start gap-2 pt-1 text-xs text-[#64748B]">
+              <div className="flex items-start gap-2 pt-1 text-xs text-[#64748B] dark:text-[#94A3B8]">
                 <input
                   type="checkbox"
                   id="agree"
                   checked={agreedToTerms}
                   onChange={(e) => setAgreedToTerms(e.target.checked)}
-                  className="mt-0.5 rounded border-[#CBD5E1] text-[#0B4EA2] focus:ring-[#0B4EA2]"
+                  className="mt-0.5 rounded border-[#CBD5E1] dark:border-[#2D3748] text-[#0B4EA2] dark:text-[#3B82F6] focus:ring-[#0B4EA2] dark:focus:ring-[#3B82F6]"
                 />
                 <label htmlFor="agree">
                   I agree to receive official grievance status SMS notifications under the Maharashtra Public Services Act.
@@ -265,10 +247,10 @@ export default function RegisterPage() {
             </form>
 
             {/* Quick Links */}
-            <div className="pt-3 border-t border-[#F1F5F9] text-center text-xs text-[#64748B]">
+            <div className="pt-3 border-t border-[#F1F5F9] dark:border-[#1E293B] text-center text-xs text-[#64748B] dark:text-[#94A3B8]">
               Already have an account?{" "}
-              <Link href={ROUTES.AUTH.CITIZEN_LOGIN} className="font-bold text-[#0B4EA2] hover:underline">
-                Citizen Mobile Login
+              <Link href={ROUTES.AUTH.LOGIN} className="font-bold text-[#0B4EA2] dark:text-[#60A5FA] hover:underline">
+                Sign In with Mobile OTP
               </Link>
             </div>
           </div>
@@ -276,7 +258,7 @@ export default function RegisterPage() {
       </div>
 
       {/* Footer */}
-      <footer className="w-full bg-white border-t border-[#E2E8F0] py-4 px-4 text-center text-xs text-[#64748B]">
+      <footer className="w-full bg-white dark:bg-[#0D131F] border-t border-[#E2E8F0] dark:border-[#1E293B] py-4 px-4 text-center text-xs text-[#64748B] dark:text-[#94A3B8] transition-colors">
         CivicResolve • Directorate of Municipal & Environmental Services
       </footer>
     </main>

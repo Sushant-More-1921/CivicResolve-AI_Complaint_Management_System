@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 480" width="100%" height="100%" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B132B" />
+      <stop offset="100%" stop-color="#1C2541" />
+    </linearGradient>
+    <linearGradient id="cardBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1E293B" />
+      <stop offset="100%" stop-color="#0F172A" />
+    </linearGradient>
+    <linearGradient id="accentBlue" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2563EB" />
+      <stop offset="100%" stop-color="#38BDF8" />
+    </linearGradient>
+    <linearGradient id="accentGreen" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#34D399" />
+    </linearGradient>
+    <linearGradient id="accentAmber" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#D97706" />
+      <stop offset="100%" stop-color="#FBBF24" />
+    </linearGradient>
+    <linearGradient id="accentPurple" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7C3AED" />
+      <stop offset="100%" stop-color="#A78BFA" />
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.4" />
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="960" height="480" rx="16" fill="url(#bgGrad)" />
+
+  <!-- Grid overlay -->
+  <g opacity="0.07" stroke="#94A3B8" stroke-width="1">
+    <line x1="0" y1="80" x2="960" y2="80" />
+    <line x1="0" y1="160" x2="960" y2="160" />
+    <line x1="0" y1="240" x2="960" y2="240" />
+    <line x1="0" y1="320" x2="960" y2="320" />
+    <line x1="0" y1="400" x2="960" y2="400" />
+    <line x1="160" y1="0" x2="160" y2="480" />
+    <line x1="320" y1="0" x2="320" y2="480" />
+    <line x1="480" y1="0" x2="480" y2="480" />
+    <line x1="640" y1="0" x2="640" y2="480" />
+    <line x1="800" y1="0" x2="800" y2="480" />
+  </g>
+
+  <!-- Title & Subtitle -->
+  <text x="480" y="44" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="#F8FAFC" letter-spacing="0.5">CivicResolve Architecture &amp; System Flow</text>
+  <text x="480" y="66" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" fill="#94A3B8">High-performance citizen grievance resolution, municipal dispatch &amp; geospatial tracking</text>
+
+  <!-- BOX 1: Frontend Client Layer -->
+  <rect x="40" y="100" width="260" height="340" rx="12" fill="url(#cardBlue)" stroke="#334155" stroke-width="1.5" filter="url(#shadow)" />
+  <rect x="40" y="100" width="260" height="38" rx="12" fill="url(#accentBlue)" />
+  <text x="170" y="124" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="700" fill="#FFFFFF">CLIENT EXPERIENCE (Next.js)</text>
+  
+  <g transform="translate(60, 155)" font-family="system-ui, -apple-system, sans-serif">
+    <!-- Citizen portal -->
+    <rect x="0" y="0" width="220" height="48" rx="8" fill="#1E293B" stroke="#475569" stroke-width="1" />
+    <text x="14" y="20" font-size="12" font-weight="600" fill="#F1F5F9">Citizen Web Portal</text>
+    <text x="14" y="36" font-size="10" fill="#94A3B8">Complaint Registration &amp; Tracking</text>
+
+    <!-- Maps & Voice -->
+    <rect x="0" y="60" width="220" height="48" rx="8" fill="#1E293B" stroke="#475569" stroke-width="1" />
+    <text x="14" y="80" font-size="12" font-weight="600" fill="#38BDF8">Mappls Interactive Maps</text>
+    <text x="14" y="96" font-size="10" fill="#94A3B8">Pinpoints, Ward Polygons &amp; Hotspots</text>
+
+    <!-- Admin dashboard -->
+    <rect x="0" y="120" width="220" height="48" rx="8" fill="#1E293B" stroke="#475569" stroke-width="1" />
+    <text x="14" y="140" font-size="12" font-weight="600" fill="#F1F5F9">Municipal Admin &amp; Staff</text>
+    <text x="14" y="156" font-size="10" fill="#94A3B8">Department &amp; Super Admin Views</text>
+
+    <!-- Officer workspace -->
+    <rect x="0" y="180" width="220" height="48" rx="8" fill="#1E293B" stroke="#475569" stroke-width="1" />
+    <text x="14" y="200" font-size="12" font-weight="600" fill="#F1F5F9">Field Officer Workspace</text>
+    <text x="14" y="216" font-size="10" fill="#94A3B8">Task Assignment &amp; Work Updates</text>
+
+    <!-- Multilingual -->
+    <rect x="0" y="240" width="220" height="30" rx="6" fill="#0F172A" stroke="#334155" stroke-width="1" />
+    <text x="110" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#38BDF8">EN | HI (हिंदी) | MR (मराठी) | GU (ગુજરાતી)</text>
+  </g>
+
+  <!-- Connectors 1 -> 2 -->
+  <path d="M300 240 L350 240" stroke="#38BDF8" stroke-width="2" stroke-dasharray="4,4" />
+  <polygon points="350,240 342,235 342,245" fill="#38BDF8" />
+  <text x="325" y="230" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="9" fill="#94A3B8">REST / WS</text>
+
+  <!-- BOX 2: Backend Core Layer -->
+  <rect x="350" y="100" width="260" height="340" rx="12" fill="url(#cardBlue)" stroke="#334155" stroke-width="1.5" filter="url(#shadow)" />
+  <rect x="350" y="100" width="260" height="38" rx="12" fill="url(#accentGreen)" />
+  <text x="480" y="124" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="700" fill="#FFFFFF">BACKEND SERVICES (Node.js)</text>
+
+  <g transform="translate(370, 155)" font-family="system-ui, -apple-system, sans-serif">
+    <!-- REST API -->
+    <rect x="0" y="0" width="220" height="48" rx="8" fill="#1E293B" stroke="#475569" stroke-width="1" />
+    <text x="14" y="20" font-size="12" font-weight="600" fill="#F1F5F9">Express 5 REST API</text>
+    <text x="14" y="36" font-size="10" fill="#94A3B8">JWT Auth &amp; Role-Based Guards</text>
+
+    <!-- Real-time sockets -->
+    <rect x="0" y="60" width="220" height="48" rx="8" fill="#1E293B" stroke="#475569" stroke-width="1" />
+    <text x="14" y="80" font-size="12" font-weight="600" fill="#34D399">Live Event Engine (Socket.io)</text>
+    <text x="14" y="96" font-size="10" fill="#94A3B8">Instant Status &amp; Admin Sync</text>
+
+    <!-- Geo Services -->
+    <rect x="0" y="120" width="220" height="48" rx="8" fill="#1E293B" stroke="#475569" stroke-width="1" />
+    <text x="14" y="140" font-size="12" font-weight="600" fill="#F1F5F9">Geo &amp; Hotspot Clustering</text>
+    <text x="14" y="156" font-size="10" fill="#94A3B8">Ward Mapping &amp; Incident Density</text>
+
+    <!-- Database Layer -->
+    <rect x="0" y="180" width="220" height="48" rx="8" fill="#1E293B" stroke="#475569" stroke-width="1" />
+    <text x="14" y="200" font-size="12" font-weight="600" fill="#34D399">Prisma ORM &amp; PostgreSQL</text>
+    <text x="14" y="216" font-size="10" fill="#94A3B8">Relational Schema &amp; Audit Logs</text>
+
+    <!-- Media Storage -->
+    <rect x="0" y="240" width="220" height="30" rx="6" fill="#0F172A" stroke="#334155" stroke-width="1" />
+    <text x="110" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#34D399">Multer Evidence Upload &amp; Validation</text>
+  </g>
+
+  <!-- Connectors 2 -> 3 -->
+  <path d="M610 240 L660 240" stroke="#FBBF24" stroke-width="2" stroke-dasharray="4,4" />
+  <polygon points="660,240 652,235 652,245" fill="#FBBF24" />
+  <text x="635" y="230" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="9" fill="#94A3B8">HTTP RPC</text>
+
+  <!-- BOX 3: AI & Vision Services -->
+  <rect x="660" y="100" width="260" height="340" rx="12" fill="url(#cardBlue)" stroke="#334155" stroke-width="1.5" filter="url(#shadow)" />
+  <rect x="660" y="100" width="260" height="38" rx="12" fill="url(#accentAmber)" />
+  <text x="790" y="124" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="700" fill="#FFFFFF">AI &amp; INTELLIGENCE (Python)</text>
+
+  <g transform="translate(680, 155)" font-family="system-ui, -apple-system, sans-serif">
+    <!-- FastAPI Service -->
+    <rect x="0" y="0" width="220" height="48" rx="8" fill="#1E293B" stroke="#475569" stroke-width="1" />
+    <text x="14" y="20" font-size="12" font-weight="600" fill="#F1F5F9">FastAPI Intelligence Engine</text>
+    <text x="14" y="36" font-size="10" fill="#94A3B8">High-speed inference microservice</text>
+
+    <!-- Image validation -->
+    <rect x="0" y="60" width="220" height="48" rx="8" fill="#1E293B" stroke="#475569" stroke-width="1" />
+    <text x="14" y="80" font-size="12" font-weight="600" fill="#FBBF24">Vision Evidence Classifier</text>
+    <text x="14" y="96" font-size="10" fill="#94A3B8">Pothole, Waste, Streetlight Verification</text>
+
+    <!-- Auto Routing -->
+    <rect x="0" y="120" width="220" height="48" rx="8" fill="#1E293B" stroke="#475569" stroke-width="1" />
+    <text x="14" y="140" font-size="12" font-weight="600" fill="#F1F5F9">Intelligent Department Routing</text>
+    <text x="14" y="156" font-size="10" fill="#94A3B8">Automatic category &amp; ward assignment</text>
+
+    <!-- Speech & Voice -->
+    <rect x="0" y="180" width="220" height="48" rx="8" fill="#1E293B" stroke="#475569" stroke-width="1" />
+    <text x="14" y="200" font-size="12" font-weight="600" fill="#F1F5F9">Multilingual Voice Processing</text>
+    <text x="14" y="216" font-size="10" fill="#94A3B8">Speech-to-text with mixed dialect support</text>
+
+    <!-- Hotspot Detection -->
+    <rect x="0" y="240" width="220" height="30" rx="6" fill="#0F172A" stroke="#334155" stroke-width="1" />
+    <text x="110" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#FBBF24">Density &amp; Recurrence Analytics</text>
+  </g>
+</svg>
+

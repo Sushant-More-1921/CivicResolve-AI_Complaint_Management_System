@@ -1,0 +1,50 @@
+{
+  "model_version": "civic-imgval-clip-v1.0.0",
+  "architecture": "CLIP-ViT-B/32 + Regularized PyTorch MLP Head",
+  "clip_backbone_path": "E:\\Mega Project\\Mega-Project\\ai-service\\models\\clip_backbone",
+  "classes": [
+    "garbage",
+    "drainage",
+    "water_pollution",
+    "road_damage",
+    "sanitation",
+    "unrelated"
+  ],
+  "train_samples": 732,
+  "validation_samples": 156,
+  "train_class_counts": {
+    "garbage": 153,
+    "drainage": 27,
+    "water_pollution": 188,
+    "road_damage": 281,
+    "sanitation": 21,
+    "unrelated": 62
+  },
+  "validation_benchmarks": [
+    {
+      "architecture": "CLIP-ViT-B/32 + Regularized PyTorch MLP Head",
+      "best_epoch": 8,
+      "val_accuracy": 0.9808,
+      "val_macro_f1": 0.9713
+    },
+    {
+      "architecture": "CLIP-ViT-B/32 + Balanced LogisticRegression (Linear Probe)",
+      "val_accuracy": 0.9551,
+      "val_macro_f1": 0.9375
+    },
+    {
+      "architecture": "ImageNet EfficientNet-B0 Backbone + Balanced Classifier Head",
+      "val_accuracy": 0.9615,
+      "val_macro_f1": 0.9209
+    }
+  ],
+  "calibrated_thresholds": {
+    "unrelated_reject_prob": 0.65,
+    "category_conf_min": 0.65,
+    "category_review_min": 0.42,
+    "desc_match_min": 0.35,
+    "clean_margin_reject": -0.025
+  },
+  "trained_at_utc": "2026-11-12T17:26:01Z",
+  "training_seconds": 293.66
+}

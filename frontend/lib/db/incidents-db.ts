@@ -1,11 +1,9 @@
 /**
  * CivicResolve Incident Database & Relational Repository
  *
- * Implements the relational structure:
- * Master Incident (1) ───< Supporting Citizen Complaints (N)
- *
  * All dashboard metrics are dynamically computed from this store.
- * Never hardcodes counts.
+ * Synchronizes with Supabase / PostgreSQL backend via /api/v1/complaints.
+ * Never hardcodes counts or uses mock fake complaints.
  */
 
 import {
@@ -24,649 +22,165 @@ import {
   calculateHaversineDistance,
 } from "@/lib/clustering/clustering-engine";
 import { emitRealTimeEvent } from "@/lib/realtime/events";
+import { getAllComplaintsAdminApi } from "@/lib/api/complaints";
+import { getSessionToken } from "@/lib/auth/session";
 
-const STORAGE_KEY = "civicresolve_incidents_db_v1";
-
-// 25 Citizen supporting reports generator for Kolhapur Ward 12 garbage crisis
-function generateKolhapur25Reports(): CitizenReport[] {
-  const citizenNames = [
-    "Amit Kulkarni", "Sunita Patil", "Ramesh Jadhav", "Priya Deshmukh",
-    "Ganesh Shinde", "Anjali More", "Sanjay Chavan", "Kavita Gaikwad",
-    "Mahesh Joshi", "Snehal Kamble", "Sachin Bhosale", "Pooja Sawant",
-    "Vikas Salunkhe", "Deepali Pawar", "Ajay Thorat", "Meena Kadam",
-    "Nitin Mane", "Rekha Sonawane", "Santosh Mohite", "Swati Nalawade",
-    "Prashant Jagtap", "Varsha Kale", "Dinesh Ghorpade", "Ashwini Shirodkar",
-    "Rahul Deshpande"
-  ];
-
-  const channels: CitizenReport["channel"][] = [
-    "MOBILE_APP", "MOBILE_APP", "WEB_PORTAL", "WHATSAPP", "MOBILE_APP",
-    "TOLL_FREE_1916", "MOBILE_APP", "WHATSAPP", "MOBILE_APP", "WEB_PORTAL",
-    "MOBILE_APP", "WHATSAPP", "MOBILE_APP", "MOBILE_APP", "TOLL_FREE_1916",
-    "WEB_PORTAL", "MOBILE_APP", "WHATSAPP", "MOBILE_APP", "MOBILE_APP",
-    "WEB_PORTAL", "MOBILE_APP", "WHATSAPP", "MOBILE_APP", "MOBILE_APP"
-  ];
-
-  const times = [
-    "06:30 AM", "06:45 AM", "07:10 AM", "07:25 AM", "07:40 AM",
-    "08:00 AM", "08:15 AM", "08:30 AM", "08:42 AM", "09:00 AM",
-    "09:15 AM", "09:28 AM", "09:40 AM", "09:55 AM", "10:05 AM",
-    "10:18 AM", "10:30 AM", "10:45 AM", "11:00 AM", "11:12 AM",
-    "11:25 AM", "11:38 AM", "11:50 AM", "12:05 PM", "12:20 PM"
-  ];
-
-  const baseLat = 16.7120;
-  const baseLng = 74.2380;
-
-  return citizenNames.map((name, idx) => {
-    // Minor micro-variations in coordinates within 100 meters
-    const offsetLat = (Math.sin(idx * 1.5) * 0.0004);
-    const offsetLng = (Math.cos(idx * 1.5) * 0.0004);
-
-    return {
-      id: `cmp-rep-${1000 + idx}`,
-      trackingNumber: `CMP-1042-${String(idx + 1).padStart(2, "0")}`,
-      citizenName: name,
-      citizenMobile: `+91 ${9822000000 + idx * 37}`,
-      description: idx === 0
-        ? "Overflowing commercial dumpster causing traffic and sanitation hazard for students at High School entrance."
-        : `Citizen report #${idx + 1}: Unbearable odor and street blockage due to garbage dump near New High School gate.`,
-      location: "Kolhapur North, Ward 12, Near New High School",
-      coordinates: { lat: baseLat + offsetLat, lng: baseLng + offsetLng },
-      reportedAt: `Today, ${times[idx]}`,
-      timestamp: Date.now() - (25 - idx) * 15 * 60 * 1000,
-      channel: channels[idx],
-      aiConfidence: 94 + (idx % 5),
-    };
-  });
-}
-
-// Initial Seed Data: Realistic Maharashtra Incidents with Clustered Supporting Reports
-const INITIAL_INCIDENTS: MasterIncident[] = [
-  // 1. Master Incident 1: 25 Citizen Reports (Kolhapur Garbage Problem)
-  {
-    id: "inc-1042",
-    incidentNumber: "INC-2026-1042",
-    title: "Overflowing commercial garbage dump at New High School entrance",
-    description: "Multi-citizen reported garbage accumulation spilling onto school entryway and pedestrian walkway. 25 neighborhood reports clustered.",
-    category: "Solid Waste",
-    subcategory: "Commercial Dumpster",
-    department: "Solid Waste Management",
-    departmentId: "dept-kmc-waste",
-    authorityId: "auth-kmc",
-    authorityName: "Kolhapur Municipal Corporation (KMC)",
-    districtId: "dist-kolhapur",
-    districtName: "Kolhapur District",
-    divisionId: "div-kolhapur",
-    divisionName: "Kolhapur Division",
-    location: "Kolhapur North, Ward 12, Near New High School",
-    region: "North Zone",
-    coordinates: { lat: 16.7120, lng: 74.2380 },
-    status: "ESCALATED",
-    priority: "VERY_HIGH", // Auto-escalated due to 25 reports
-    assignedOfficer: "R. K. Patil",
-    assignedOfficerId: "off-1",
-    complaintCount: 25,
-    supportingReports: generateKolhapur25Reports(),
-    firstReportedAt: "Today, 06:30 AM",
-    lastReportedAt: "Today, 12:20 PM",
-    createdAtTimestamp: Date.now() - 6 * 3600 * 1000,
-    lastReportedTimestamp: Date.now() - 30 * 60 * 1000,
-    slaHours: 4,
-    slaDeadline: "Today, 02:30 PM",
-    slaRemainingMinutes: -45, // Breached
-    isSlaBreached: true,
-    imageUrl: "https://images.unsplash.com/photo-1605600659908-0ef719419d41?auto=format&fit=crop&w=600&q=80",
-    aiConfidence: 98,
-    aiSuggestedCategory: "Solid Waste / School Proximity",
-    aiReasoning: "Clustered 25 concurrent citizen complaints in 400m radius. Priority elevated to VERY_HIGH due to child health hazard.",
-    routingAuditTrail: [
-      {
-        level: "DIVISION",
-        entityName: "Kolhapur Division",
-        timestamp: "Today, 06:30 AM",
-        method: "AI_GEO_POLYGON",
-        details: "Matched GPS to Kolhapur Division polygon.",
-      },
-      {
-        level: "LOCAL_AUTHORITY",
-        entityName: "Kolhapur Municipal Corporation (KMC)",
-        timestamp: "Today, 06:30 AM",
-        method: "AI_GEO_POLYGON",
-        details: "Matched to Ward 12 Municipal Boundary of KMC.",
-      },
-      {
-        level: "DEPARTMENT",
-        entityName: "Solid Waste Management",
-        timestamp: "Today, 06:31 AM",
-        method: "ADDRESS_NLP",
-        details: "Classified to Solid Waste Department.",
-      },
-      {
-        level: "OFFICER",
-        entityName: "R. K. Patil",
-        timestamp: "Today, 07:00 AM",
-        method: "WORKLOAD_BALANCER",
-        details: "Assigned to Ward 12 Sanitary Inspector R. K. Patil.",
-      },
-    ],
-    timeline: [
-      {
-        status: "SUBMITTED",
-        timestamp: "Today, 06:30 AM",
-        note: "Master Incident created from first citizen report (Amit Kulkarni).",
-        author: "Citizen (Amit Kulkarni)",
-      },
-      {
-        status: "ASSIGNED",
-        timestamp: "Today, 07:00 AM",
-        note: "Assigned to Officer R. K. Patil. Dynamic clustering active.",
-        author: "Auto-Dispatch Pipeline",
-      },
-      {
-        status: "ESCALATED",
-        timestamp: "Today, 10:30 AM",
-        note: "Surge reached 15+ citizen reports. SLA Watchdog auto-escalated priority to VERY_HIGH.",
-        author: "Clustering & SLA Engine",
-      },
-      {
-        status: "ESCALATED",
-        timestamp: "Today, 12:20 PM",
-        note: "Latest report #25 linked from citizen Rahul Deshpande. Active complaintCount = 25.",
-        author: "Real-time Clustering Engine",
-      },
-    ],
-  },
-
-  // 2. Master Incident 2: 14 Citizen Reports (Kolhapur Water Pipeline Burst)
-  {
-    id: "inc-1041",
-    incidentNumber: "INC-2026-1041",
-    title: "Major water pipeline rupture on Main Market Road",
-    description: "Drinking water trunk pipeline leakage flooding market roadway and affecting water supply across sectors.",
-    category: "Water Supply",
-    subcategory: "Main Line Burst",
-    department: "Hydraulics & Water Supply",
-    departmentId: "dept-kmc-water",
-    authorityId: "auth-kmc",
-    authorityName: "Kolhapur Municipal Corporation (KMC)",
-    districtId: "dist-kolhapur",
-    districtName: "Kolhapur District",
-    divisionId: "div-kolhapur",
-    divisionName: "Kolhapur Division",
-    location: "Main Market Road, Sector 4, Opposite Laxmi Temple",
-    region: "Central Zone",
-    coordinates: { lat: 16.7050, lng: 74.2420 },
-    status: "IN_PROGRESS",
-    priority: "VERY_HIGH",
-    assignedOfficer: "Suresh S. Mane",
-    assignedOfficerId: "off-2",
-    complaintCount: 14,
-    supportingReports: [
-      {
-        id: "cmp-rep-201",
-        trackingNumber: "CMP-1041-01",
-        citizenName: "Santosh Shinde",
-        citizenMobile: "+91 98221 44551",
-        description: "Water pipeline cracked near shop #14, water gushing onto sidewalk.",
-        location: "Main Market Road, Shop 14",
-        coordinates: { lat: 16.7050, lng: 74.2420 },
-        reportedAt: "Today, 08:15 AM",
-        timestamp: Date.now() - 4 * 3600 * 1000,
-        channel: "MOBILE_APP",
-      },
-      {
-        id: "cmp-rep-202",
-        trackingNumber: "CMP-1041-02",
-        citizenName: "Deepak Sutar",
-        citizenMobile: "+91 98221 44552",
-        description: "Entire Laxmi temple chowk flooded with potable water.",
-        location: "Opposite Laxmi Temple",
-        coordinates: { lat: 16.7052, lng: 74.2423 },
-        reportedAt: "Today, 08:30 AM",
-        timestamp: Date.now() - 3.7 * 3600 * 1000,
-        channel: "WHATSAPP",
-      },
-      ...Array.from({ length: 12 }).map((_, i) => ({
-        id: `cmp-rep-${203 + i}`,
-        trackingNumber: `CMP-1041-${String(i + 3).padStart(2, "0")}`,
-        citizenName: `Citizen Verified ${i + 3}`,
-        citizenMobile: `+91 ${9822144553 + i}`,
-        description: `Drinking water supply cut off and road submersed near Market Sector 4.`,
-        location: `Main Market Road, Block ${String.fromCharCode(65 + i)}`,
-        coordinates: { lat: 16.7050 + (i * 0.0001), lng: 74.2420 + (i * 0.0001) },
-        reportedAt: `Today, ${9 + Math.floor(i / 4)}:${(i * 12) % 60} AM`,
-        timestamp: Date.now() - (3 - i * 0.15) * 3600 * 1000,
-        channel: "MOBILE_APP" as const,
-      })),
-    ],
-    firstReportedAt: "Today, 08:15 AM",
-    lastReportedAt: "Today, 11:45 AM",
-    createdAtTimestamp: Date.now() - 4.5 * 3600 * 1000,
-    lastReportedTimestamp: Date.now() - 1.2 * 3600 * 1000,
-    slaHours: 6,
-    slaDeadline: "Today, 02:15 PM",
-    slaRemainingMinutes: 80,
-    isSlaBreached: false,
-    imageUrl: "https://images.unsplash.com/photo-1541888946425-d0fbb18615f3?auto=format&fit=crop&w=600&q=80",
-    aiConfidence: 97,
-    aiSuggestedCategory: "Hydraulics / Water Rupture",
-    aiReasoning: "Clustered 14 citizen reports into single emergency repair ticket.",
-    routingAuditTrail: [],
-    timeline: [
-      {
-        status: "SUBMITTED",
-        timestamp: "Today, 08:15 AM",
-        note: "Initial water line burst reported.",
-        author: "Citizen (Santosh Shinde)",
-      },
-      {
-        status: "ASSIGNED",
-        timestamp: "Today, 08:25 AM",
-        note: "Dispatched hydraulic crew under Suresh S. Mane.",
-        author: "Disaster Cell",
-      },
-      {
-        status: "IN_PROGRESS",
-        timestamp: "Today, 09:10 AM",
-        note: "Isolation valves shut; excavation team on-site.",
-        author: "Officer (Suresh S. Mane)",
-      },
-    ],
-  },
-
-  // 3. Master Incident 3: 9 Citizen Reports (Pune Roads / Potholes)
-  {
-    id: "inc-1040",
-    incidentNumber: "INC-2026-1040",
-    title: "Dangerous pothole cluster and sunken manhole on Paud Road",
-    description: "Multiple severe potholes causing vehicular accidents and severe traffic bottleneck during peak hours.",
-    category: "Roads & Traffic",
-    subcategory: "Pothole Cluster",
-    department: "Road Maintenance & Infrastructure",
-    departmentId: "dept-pmc-roads",
-    authorityId: "auth-pmc",
-    authorityName: "Pune Municipal Corporation (PMC)",
-    districtId: "dist-pune",
-    districtName: "Pune District",
-    divisionId: "div-pune",
-    divisionName: "Pune Division",
-    location: "Kothrud, Paud Road, Near Vanaz Metro Station",
-    region: "West Zone",
-    coordinates: { lat: 18.5074, lng: 73.8077 },
-    status: "ASSIGNED",
-    priority: "HIGH",
-    assignedOfficer: "V. N. Deshmukh",
-    assignedOfficerId: "off-4",
-    complaintCount: 9,
-    supportingReports: Array.from({ length: 9 }).map((_, i) => ({
-      id: `cmp-rep-${301 + i}`,
-      trackingNumber: `CMP-1040-${String(i + 1).padStart(2, "0")}`,
-      citizenName: `Pune Commuter ${i + 1}`,
-      citizenMobile: `+91 ${9822300000 + i}`,
-      description: `Large pothole deep enough to damage two-wheelers outside Vanaz station pillar #${120 + i}.`,
-      location: `Kothrud, Paud Road, Pillar ${120 + i}`,
-      coordinates: { lat: 18.5074 + i * 0.0001, lng: 73.8077 - i * 0.0001 },
-      reportedAt: `Yesterday, ${4 + i}:30 PM`,
-      timestamp: Date.now() - (18 - i) * 3600 * 1000,
-      channel: "MOBILE_APP",
-    })),
-    firstReportedAt: "Yesterday, 04:30 PM",
-    lastReportedAt: "Today, 09:30 AM",
-    createdAtTimestamp: Date.now() - 20 * 3600 * 1000,
-    lastReportedTimestamp: Date.now() - 3.5 * 3600 * 1000,
-    slaHours: 12,
-    slaDeadline: "Today, 04:30 AM",
-    slaRemainingMinutes: -310,
-    isSlaBreached: true,
-    imageUrl: "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=600&q=80",
-    aiConfidence: 95,
-    aiSuggestedCategory: "Road Hazard",
-    aiReasoning: "Clustered 9 citizen commuter complaints on arterial metro corridor.",
-    routingAuditTrail: [],
-    timeline: [
-      {
-        status: "SUBMITTED",
-        timestamp: "Yesterday, 04:30 PM",
-        note: "Incident logged by commuters.",
-        author: "Citizen Portal",
-      },
-      {
-        status: "ASSIGNED",
-        timestamp: "Yesterday, 05:15 PM",
-        note: "Assigned to Road Maintenance Officer V. N. Deshmukh.",
-        author: "PMC Works Dept",
-      },
-    ],
-  },
-
-  // 4. Master Incident 4: 6 Citizen Reports (Pune Drainage Overflow)
-  {
-    id: "inc-1039",
-    incidentNumber: "INC-2026-1039",
-    title: "Sewage inspection chamber overflowing on Swargate link road",
-    description: "Raw sewage spilling onto pedestrian lane causing hazardous foul stench.",
-    category: "Drainage & Sewerage",
-    subcategory: "Chamber Overflow",
-    department: "Drainage & Sewerage",
-    departmentId: "dept-pmc-drainage",
-    authorityId: "auth-pmc",
-    authorityName: "Pune Municipal Corporation (PMC)",
-    districtId: "dist-pune",
-    districtName: "Pune District",
-    divisionId: "div-pune",
-    divisionName: "Pune Division",
-    location: "Swargate Chowk, Near Bus Depot Exit",
-    region: "South Zone",
-    coordinates: { lat: 18.5018, lng: 73.8586 },
-    status: "IN_PROGRESS",
-    priority: "HIGH",
-    assignedOfficer: "Anil K. Shinde",
-    assignedOfficerId: "off-5",
-    complaintCount: 6,
-    supportingReports: Array.from({ length: 6 }).map((_, i) => ({
-      id: `cmp-rep-${401 + i}`,
-      trackingNumber: `CMP-1039-${String(i + 1).padStart(2, "0")}`,
-      citizenName: `Swargate Citizen ${i + 1}`,
-      citizenMobile: `+91 ${9822400000 + i}`,
-      description: `Drainage blockage outside depot exit creating puddle and smell.`,
-      location: `Swargate Bus Depot Gate ${i + 1}`,
-      coordinates: { lat: 18.5018 + i * 0.0001, lng: 73.8586 },
-      reportedAt: `Today, 07:${10 + i * 15} AM`,
-      timestamp: Date.now() - (5 - i * 0.5) * 3600 * 1000,
-      channel: "WHATSAPP",
-    })),
-    firstReportedAt: "Today, 07:10 AM",
-    lastReportedAt: "Today, 08:25 AM",
-    createdAtTimestamp: Date.now() - 5.5 * 3600 * 1000,
-    lastReportedTimestamp: Date.now() - 4.5 * 3600 * 1000,
-    slaHours: 8,
-    slaDeadline: "Today, 03:10 PM",
-    slaRemainingMinutes: 140,
-    isSlaBreached: false,
-    aiConfidence: 93,
-    aiSuggestedCategory: "Sanitation & Drainage",
-    aiReasoning: "Clustered 6 citizen notifications into single suction machine dispatch.",
-    routingAuditTrail: [],
-    timeline: [
-      {
-        status: "SUBMITTED",
-        timestamp: "Today, 07:10 AM",
-        note: "Chamber overflow reported.",
-        author: "Citizen (WhatsApp)",
-      },
-      {
-        status: "IN_PROGRESS",
-        timestamp: "Today, 08:30 AM",
-        note: "Jetting machine vehicle JET-04 dispatched to site.",
-        author: "PMC Drainage Inspector",
-      },
-    ],
-  },
-
-  // 5. Master Incident 5: 18 Citizen Reports (Mumbai Solid Waste)
-  {
-    id: "inc-1038",
-    incidentNumber: "INC-2026-1038",
-    title: "Massive illegal construction debris dumping along railway boundary",
-    description: "Truckloads of plaster and rubble dumped along Dadar East railway boundary blocking stormwater culvert.",
-    category: "Solid Waste",
-    subcategory: "Construction Waste",
-    department: "Solid Waste Management",
-    departmentId: "dept-mcgm-waste",
-    authorityId: "auth-mcgm",
-    authorityName: "Brihanmumbai Municipal Corporation (BMC/MCGM)",
-    districtId: "dist-mumbai",
-    districtName: "Mumbai City District",
-    divisionId: "div-mumbai",
-    divisionName: "Mumbai Division",
-    location: "Dadar East, Near Flyover Pier 14, Senapati Bapat Marg",
-    region: "Island City Zone",
-    coordinates: { lat: 19.0178, lng: 72.8478 },
-    status: "ASSIGNED",
-    priority: "VERY_HIGH",
-    assignedOfficer: "P. R. Shinde",
-    assignedOfficerId: "off-6",
-    complaintCount: 18,
-    supportingReports: Array.from({ length: 18 }).map((_, i) => ({
-      id: `cmp-rep-${501 + i}`,
-      trackingNumber: `CMP-1038-${String(i + 1).padStart(2, "0")}`,
-      citizenName: `Dadar Resident ${i + 1}`,
-      citizenMobile: `+91 ${9822500000 + i}`,
-      description: `Rubble dump blocking water outlet near Flyover Pier 14.`,
-      location: `Dadar East, Pier 14, Bapat Marg`,
-      coordinates: { lat: 19.0178 + i * 0.0001, lng: 72.8478 },
-      reportedAt: `Yesterday, 08:${15 + (i * 10) % 45} PM`,
-      timestamp: Date.now() - (16 - i * 0.5) * 3600 * 1000,
-      channel: "MOBILE_APP",
-    })),
-    firstReportedAt: "Yesterday, 08:15 PM",
-    lastReportedAt: "Today, 07:45 AM",
-    createdAtTimestamp: Date.now() - 16 * 3600 * 1000,
-    lastReportedTimestamp: Date.now() - 5 * 3600 * 1000,
-    slaHours: 12,
-    slaDeadline: "Today, 08:15 AM",
-    slaRemainingMinutes: -240,
-    isSlaBreached: true,
-    aiConfidence: 96,
-    aiSuggestedCategory: "C&D Waste Dumping",
-    aiReasoning: "Clustered 18 citizen alerts in Dadar flyover perimeter.",
-    routingAuditTrail: [],
-    timeline: [
-      {
-        status: "SUBMITTED",
-        timestamp: "Yesterday, 08:15 PM",
-        note: "Debris dumping detected.",
-        author: "Citizen Intake",
-      },
-      {
-        status: "ASSIGNED",
-        timestamp: "Yesterday, 09:00 PM",
-        note: "Assigned to BMC Ward G/North Squad.",
-        author: "BMC Control Room",
-      },
-    ],
-  },
-
-  // 6. Master Incident 6: 4 Citizen Reports (Nashik Streetlights)
-  {
-    id: "inc-1037",
-    incidentNumber: "INC-2026-1037",
-    title: "Blackout of consecutive streetlights on Godavari Ghat walkway",
-    description: "Series of 8 LED streetlamps non-functional creating public safety concerns along pilgrim route.",
-    category: "Electrical & Lighting",
-    subcategory: "Streetlight Cluster",
-    department: "Electrical & Street Lighting",
-    departmentId: "dept-nmc-electrical",
-    authorityId: "auth-nmc",
-    authorityName: "Nashik Municipal Corporation (NMC)",
-    districtId: "dist-nashik",
-    districtName: "Nashik District",
-    divisionId: "div-nashik",
-    divisionName: "Nashik Division",
-    location: "Panchavati, Ramkund Walkway, Pillar 1 to 8",
-    region: "Panchavati Zone",
-    coordinates: { lat: 20.0063, lng: 73.7903 },
-    status: "SUBMITTED",
-    priority: "MEDIUM",
-    complaintCount: 4,
-    supportingReports: Array.from({ length: 4 }).map((_, i) => ({
-      id: `cmp-rep-${601 + i}`,
-      trackingNumber: `CMP-1037-${String(i + 1).padStart(2, "0")}`,
-      citizenName: `Nashik Visitor ${i + 1}`,
-      citizenMobile: `+91 ${9822600000 + i}`,
-      description: `Darkness on pilgrim path, streetlights off.`,
-      location: `Panchavati Ramkund Pillar ${i + 1}`,
-      coordinates: { lat: 20.0063 + i * 0.0001, lng: 73.7903 },
-      reportedAt: `Today, 05:30 AM`,
-      timestamp: Date.now() - 7 * 3600 * 1000,
-      channel: "TOLL_FREE_1916",
-    })),
-    firstReportedAt: "Today, 05:30 AM",
-    lastReportedAt: "Today, 06:45 AM",
-    createdAtTimestamp: Date.now() - 7 * 3600 * 1000,
-    lastReportedTimestamp: Date.now() - 6 * 3600 * 1000,
-    slaHours: 24,
-    slaDeadline: "Tomorrow, 05:30 AM",
-    slaRemainingMinutes: 1020,
-    isSlaBreached: false,
-    aiConfidence: 91,
-    aiSuggestedCategory: "Public Illumination",
-    aiReasoning: "Clustered 4 early-morning pilgrim reports.",
-    routingAuditTrail: [],
-    timeline: [
-      {
-        status: "SUBMITTED",
-        timestamp: "Today, 05:30 AM",
-        note: "Toll-free 1916 calls clustered.",
-        author: "Citizen Hotline 1916",
-      },
-    ],
-  },
-
-  // 7. Master Incident 7: 1 Citizen Report (New Unassigned Issue in Kolhapur)
-  {
-    id: "inc-1036",
-    incidentNumber: "INC-2026-1036",
-    title: "Broken pavement slab with exposed iron rebar near bus stop",
-    description: "Pedestrian footpath slab cracked with sharp iron rebars posing tripping danger.",
-    category: "Roads & Traffic",
-    subcategory: "Footpath Damage",
-    department: "Road Maintenance & Infrastructure",
-    departmentId: "dept-kmc-roads",
-    authorityId: "auth-kmc",
-    authorityName: "Kolhapur Municipal Corporation (KMC)",
-    districtId: "dist-kolhapur",
-    districtName: "Kolhapur District",
-    divisionId: "div-kolhapur",
-    divisionName: "Kolhapur Division",
-    location: "Rajarampuri 2nd Lane, City Bus Stop",
-    region: "East Zone",
-    coordinates: { lat: 16.6980, lng: 74.2510 },
-    status: "SUBMITTED",
-    priority: "MEDIUM",
-    complaintCount: 1,
-    supportingReports: [
-      {
-        id: "cmp-rep-701",
-        trackingNumber: "CMP-1036-01",
-        citizenName: "Tanaji Kadam",
-        citizenMobile: "+91 98227 11223",
-        description: "Footpath slab broke under passenger foot, iron bars sticking out.",
-        location: "Rajarampuri 2nd Lane Bus Stop",
-        coordinates: { lat: 16.6980, lng: 74.2510 },
-        reportedAt: "Today, 11:10 AM",
-        timestamp: Date.now() - 1.5 * 3600 * 1000,
-        channel: "MOBILE_APP",
-      },
-    ],
-    firstReportedAt: "Today, 11:10 AM",
-    lastReportedAt: "Today, 11:10 AM",
-    createdAtTimestamp: Date.now() - 1.5 * 3600 * 1000,
-    lastReportedTimestamp: Date.now() - 1.5 * 3600 * 1000,
-    slaHours: 24,
-    slaDeadline: "Tomorrow, 11:10 AM",
-    slaRemainingMinutes: 1350,
-    isSlaBreached: false,
-    aiConfidence: 92,
-    aiSuggestedCategory: "Pedestrian Safety",
-    aiReasoning: "Single report logged, auto-queued for inspector allocation.",
-    routingAuditTrail: [],
-    timeline: [
-      {
-        status: "SUBMITTED",
-        timestamp: "Today, 11:10 AM",
-        note: "Grievance received from citizen Tanaji Kadam.",
-        author: "Citizen Mobile App",
-      },
-    ],
-  },
-
-  // 8. Master Incident 8: 5 Citizen Reports (Resolved with Verification)
-  {
-    id: "inc-1035",
-    incidentNumber: "INC-2026-1035",
-    title: "Fallen tree branch obstructing dual carriageway cleared",
-    description: "Storm caused heavy banyan limb to block roadway near Shivaji University Gate.",
-    category: "Garden & Trees",
-    subcategory: "Tree Fall Emergency",
-    department: "Parks & Urban Forestry",
-    departmentId: "dept-kmc-gardens",
-    authorityId: "auth-kmc",
-    authorityName: "Kolhapur Municipal Corporation (KMC)",
-    districtId: "dist-kolhapur",
-    districtName: "Kolhapur District",
-    divisionId: "div-kolhapur",
-    divisionName: "Kolhapur Division",
-    location: "Vidyanagar, Outside Shivaji University Main Arch",
-    region: "South Zone",
-    coordinates: { lat: 16.6770, lng: 74.2540 },
-    status: "RESOLVED",
-    priority: "HIGH",
-    assignedOfficer: "S. A. Deshpande",
-    assignedOfficerId: "off-3",
-    complaintCount: 5,
-    supportingReports: Array.from({ length: 5 }).map((_, i) => ({
-      id: `cmp-rep-${801 + i}`,
-      trackingNumber: `CMP-1035-${String(i + 1).padStart(2, "0")}`,
-      citizenName: `University Commuter ${i + 1}`,
-      citizenMobile: `+91 ${9822800000 + i}`,
-      description: `Banyan branch fell blocking both road lanes.`,
-      location: `University Arch, Gate ${i + 1}`,
-      coordinates: { lat: 16.6770 + i * 0.0001, lng: 74.2540 },
-      reportedAt: `Yesterday, 02:00 PM`,
-      timestamp: Date.now() - 22 * 3600 * 1000,
-      channel: "MOBILE_APP",
-    })),
-    firstReportedAt: "Yesterday, 02:00 PM",
-    lastReportedAt: "Yesterday, 03:15 PM",
-    createdAtTimestamp: Date.now() - 22 * 3600 * 1000,
-    lastReportedTimestamp: Date.now() - 21 * 3600 * 1000,
-    slaHours: 6,
-    slaDeadline: "Yesterday, 08:00 PM",
-    slaRemainingMinutes: 0,
-    isSlaBreached: false,
-    resolutionEvidence: {
-      imageUrl: "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80",
-      remarks: "Branch sawn with hydraulic cutter, wood transported to nursery and roadway opened.",
-      uploadedAt: "Yesterday, 05:40 PM",
-      uploadedBy: "S. A. Deshpande",
-      inspectionPassed: true,
-    },
-    aiConfidence: 96,
-    aiSuggestedCategory: "Emergency Obstruction",
-    aiReasoning: "Clustered 5 commuter reports; successfully resolved within SLA.",
-    routingAuditTrail: [],
-    timeline: [
-      {
-        status: "SUBMITTED",
-        timestamp: "Yesterday, 02:00 PM",
-        note: "Tree obstruction reported.",
-        author: "Citizen Portal",
-      },
-      {
-        status: "ASSIGNED",
-        timestamp: "Yesterday, 02:15 PM",
-        note: "Dispatched Emergency Tree Trimming Squad.",
-        author: "KMC Forestry",
-      },
-      {
-        status: "RESOLVED",
-        timestamp: "Yesterday, 05:40 PM",
-        note: "Roadway cleared and photo evidence verified.",
-        author: "Officer (S. A. Deshpande)",
-      },
-    ],
-  },
-];
+const STORAGE_KEY = "civicresolve_incidents_db_v2";
 
 // In-Memory Storage Cache (Singleton across requests)
-let cachedIncidents: MasterIncident[] = [...INITIAL_INCIDENTS];
+let cachedIncidents: MasterIncident[] = [];
+
+/**
+ * Adapter converting raw backend complaint (or Complaint interface) to MasterIncident
+ */
+export function backendComplaintToIncident(raw: any): MasterIncident {
+  const createdDate = raw.createdAt ? new Date(raw.createdAt) : new Date();
+  const updatedDate = raw.updatedAt ? new Date(raw.updatedAt) : createdDate;
+  const lat = typeof raw.latitude === "number"
+    ? raw.latitude
+    : (raw.coordinates?.lat || 0);
+  const lng = typeof raw.longitude === "number"
+    ? raw.longitude
+    : (raw.coordinates?.lng || 0);
+
+  const trackingNumber = raw.trackingNumber || raw.incidentNumber || raw.id;
+  const citizenName = raw.citizen?.name || raw.citizenName || "Verified Citizen";
+  const citizenMobile = raw.citizen?.phoneNumber || raw.citizenMobile || "+91 98220 00000";
+
+  const supportingReports: CitizenReport[] = [
+    {
+      id: `rep-${raw.id}`,
+      trackingNumber,
+      citizenName,
+      citizenMobile,
+      description: raw.description || "",
+      location: raw.location || "Maharashtra",
+      coordinates: { lat, lng },
+      imageUrl: raw.imageUrl || undefined,
+      reportedAt: createdDate.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      timestamp: createdDate.getTime(),
+      channel: "WEB_PORTAL",
+      aiConfidence: raw.aiConfidence || 95,
+    },
+  ];
+
+  const timelineEvents = Array.isArray(raw.timeline) && raw.timeline.length > 0
+    ? raw.timeline.map((t: any) => ({
+        status: (t.status || "SUBMITTED") as ComplaintStatus,
+        timestamp: t.createdAt
+          ? new Date(t.createdAt).toLocaleDateString("en-IN", {
+              day: "numeric",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "Just now",
+        note: t.note || "Status updated",
+        author: t.author || "System Authority",
+      }))
+    : [
+        {
+          status: (raw.status || "SUBMITTED") as ComplaintStatus,
+          timestamp: createdDate.toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          note: "Grievance received and cataloged in central registry.",
+          author: "Citizen Intake",
+        },
+      ];
+
+  const slaDeadlineStr = raw.slaDeadline
+    ? new Date(raw.slaDeadline).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "SLA Active";
+
+  const deptName = raw.department?.name || raw.departmentName || (typeof raw.department === "string" ? raw.department : "Municipal Public Works");
+
+  return {
+    id: raw.id,
+    incidentNumber: trackingNumber,
+    title: raw.title || (raw.description ? (raw.description.slice(0, 70) + (raw.description.length > 70 ? "..." : "")) : "Civic Grievance"),
+    description: raw.description || "",
+    category: raw.category || "General Municipal Services",
+    subcategory: raw.subcategory || raw.subCategory || undefined,
+    divisionId: raw.divisionId || "div-kolhapur",
+    divisionName: raw.divisionName || "Kolhapur Division",
+    districtId: raw.districtId || "dist-kolhapur",
+    districtName: raw.districtName || "Kolhapur District",
+    authorityId: raw.authorityId || "auth-kmc",
+    authorityName: raw.authorityName || "Kolhapur Municipal Corporation (KMC)",
+    departmentId: raw.departmentId || raw.department?.id || "dept-kmc-general",
+    departmentName: deptName,
+    department: deptName,
+    location: raw.location || "Maharashtra",
+    region: raw.divisionName || "Central Zone",
+    coordinates: { lat, lng },
+    status: (raw.status || "SUBMITTED") as ComplaintStatus,
+    priority: (raw.priority || "MEDIUM") as ComplaintPriority,
+    assignedOfficer: raw.assignedOfficerName || raw.assignedOfficer?.name || (typeof raw.assignedOfficer === "string" ? raw.assignedOfficer : undefined),
+    assignedOfficerId: raw.assignedOfficerId || undefined,
+    complaintCount: 1,
+    supportingReports,
+    firstReportedAt: createdDate.toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    lastReportedAt: updatedDate.toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    createdAtTimestamp: createdDate.getTime(),
+    lastReportedTimestamp: updatedDate.getTime(),
+    slaHours: 24,
+    slaDeadline: slaDeadlineStr,
+    slaRemainingMinutes: 1440,
+    isSlaBreached: Boolean(raw.isSlaBreached),
+    imageUrl: raw.imageUrl || undefined,
+    aiConfidence: raw.aiConfidence || 95,
+    aiSuggestedCategory: raw.aiSuggestedCategory || raw.category || "General Municipal Services",
+    aiReasoning: raw.aiReasoning || "AI verified and categorized.",
+    priorityModelVersion: raw.priorityModelVersion || undefined,
+    priorityPredictedAt: raw.priorityPredictedAt || undefined,
+    timeline: timelineEvents,
+    routingAuditTrail: raw.routingAuditTrail || [],
+    resolutionEvidence: raw.resolutionEvidence || (raw.resolvedAt
+      ? {
+          imageUrl: raw.resolutionImageUrl || "",
+          remarks: raw.resolutionRemarks || "Resolved",
+          uploadedAt: new Date(raw.resolvedAt).toLocaleDateString("en-IN"),
+          uploadedBy: raw.assignedOfficerName || "Field Team",
+          inspectionPassed: true,
+        }
+      : undefined),
+    feedback: raw.feedback?.[0] || (Array.isArray(raw.feedback) ? raw.feedback[0] : raw.feedback) || undefined,
+    tasks: Array.isArray(raw.tasks) ? raw.tasks : [],
+    evidence: Array.isArray(raw.evidence) ? raw.evidence : [],
+  };
+}
 
 /**
  * Loads incidents from localStorage in browser or cached memory on server
  */
 export function getStoredIncidents(): MasterIncident[] {
+  if (cachedIncidents && cachedIncidents.length > 0) {
+    return cachedIncidents;
+  }
   if (typeof window !== "undefined") {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -685,14 +199,33 @@ export function getStoredIncidents(): MasterIncident[] {
 }
 
 /**
+ * Strips huge Base64 data URIs before persisting to localStorage to respect browser 5MB storage limit
+ */
+function sanitizeForLocalStorage(incidents: MasterIncident[]): any[] {
+  return incidents.map((inc) => {
+    const clone = { ...inc };
+    if (clone.imageUrl && clone.imageUrl.startsWith("data:") && clone.imageUrl.length > 500) {
+      clone.imageUrl = undefined;
+    }
+    if (clone.supportingReports) {
+      clone.supportingReports = clone.supportingReports.map((r) => ({
+        ...r,
+        imageUrl: (r.imageUrl && r.imageUrl.startsWith("data:") && r.imageUrl.length > 500) ? undefined : r.imageUrl,
+      }));
+    }
+    return clone;
+  });
+}
+
+/**
  * Saves incidents to storage and notifies subscribers
  */
 export function saveIncidents(incidents: MasterIncident[]): void {
   cachedIncidents = [...incidents];
   if (typeof window !== "undefined") {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(incidents));
-      // Dispatch browser cross-tab and in-tab event
+      const sanitized = sanitizeForLocalStorage(incidents);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
       window.dispatchEvent(new CustomEvent("civicresolve:incident-updated", { detail: { timestamp: Date.now() } }));
     } catch (e) {
       console.warn("Failed saving incidents to localStorage", e);
@@ -701,14 +234,36 @@ export function saveIncidents(incidents: MasterIncident[]): void {
 }
 
 /**
- * Reset database to initial seed data
+ * Synchronizes frontend incident store directly with PostgreSQL / Supabase backend.
+ * Replaces any stale mock state with real database records.
+ */
+export async function fetchAndSyncDatabaseComplaints(token?: string): Promise<MasterIncident[]> {
+  try {
+    const effectiveToken = token || getSessionToken() || "";
+    if (!effectiveToken) {
+      return getStoredIncidents();
+    }
+    const complaints = await getAllComplaintsAdminApi(undefined, effectiveToken);
+    if (complaints && complaints.length > 0) {
+      const converted = complaints.map((c) => backendComplaintToIncident(c));
+      saveIncidents(converted);
+      return converted;
+    }
+    return getStoredIncidents();
+  } catch {
+    return getStoredIncidents();
+  }
+}
+
+/**
+ * Reset database to empty or sync from backend
  */
 export function resetDatabaseToSeed(): MasterIncident[] {
-  cachedIncidents = JSON.parse(JSON.stringify(INITIAL_INCIDENTS));
+  cachedIncidents = [];
   if (typeof window !== "undefined") {
     try {
       localStorage.removeItem(STORAGE_KEY);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cachedIncidents));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
       window.dispatchEvent(new CustomEvent("civicresolve:incident-updated", { detail: { timestamp: Date.now() } }));
     } catch {}
   }
@@ -719,26 +274,45 @@ export function resetDatabaseToSeed(): MasterIncident[] {
  * Dynamic Database Filter
  * Applies multi-tier filtering (Division, District, Authority, Department, Officer, Priority, Status, Date)
  */
-export function queryIncidents(filters?: IncidentFilterParams): MasterIncident[] {
-  const all = getStoredIncidents();
+export function queryIncidents(filters?: IncidentFilterParams, dataOverride?: MasterIncident[]): MasterIncident[] {
+  const all = (dataOverride && dataOverride.length > 0) ? dataOverride : getStoredIncidents();
   if (!filters) return all;
 
   return all.filter((inc) => {
     // 1. Division
-    if (filters.divisionId && filters.divisionId !== "ALL" && inc.divisionId !== filters.divisionId) {
-      return false;
+    if (filters.divisionId && filters.divisionId !== "ALL") {
+      const matchDiv =
+        inc.divisionId === filters.divisionId ||
+        (inc.divisionName && inc.divisionName.toLowerCase() === filters.divisionId.toLowerCase()) ||
+        (filters.divisionId.includes("kolhapur") && (inc.divisionId?.includes("kolhapur") || inc.divisionName?.toLowerCase().includes("kolhapur"))) ||
+        (filters.divisionId.includes("pune") && (inc.divisionId?.includes("pune") || inc.divisionName?.toLowerCase().includes("pune")));
+      if (!matchDiv) return false;
     }
     // 2. District
     if (filters.districtId && filters.districtId !== "ALL" && inc.districtId !== filters.districtId) {
       return false;
     }
     // 3. Local Authority
-    if (filters.authorityId && filters.authorityId !== "ALL" && inc.authorityId !== filters.authorityId) {
-      return false;
+    if (filters.authorityId && filters.authorityId !== "ALL") {
+      const matchAuth =
+        inc.authorityId === filters.authorityId ||
+        (inc.authorityName && inc.authorityName.toLowerCase() === filters.authorityId.toLowerCase()) ||
+        (filters.authorityId.includes("kmc") && (inc.authorityId?.includes("kmc") || inc.authorityName?.toLowerCase().includes("kolhapur"))) ||
+        (filters.authorityId.includes("pmc") && (inc.authorityId?.includes("pmc") || inc.authorityName?.toLowerCase().includes("pune")));
+      if (!matchAuth) return false;
     }
     // 4. Department
-    if (filters.departmentId && filters.departmentId !== "ALL" && inc.departmentId !== filters.departmentId) {
-      return false;
+    if (filters.departmentId && filters.departmentId !== "ALL") {
+      const matchDept =
+        inc.departmentId === filters.departmentId ||
+        (inc.department && inc.department.toLowerCase() === filters.departmentId.toLowerCase()) ||
+        (inc.departmentName && inc.departmentName.toLowerCase() === filters.departmentId.toLowerCase()) ||
+        (filters.departmentId.includes("waste") && inc.department?.toLowerCase().includes("waste")) ||
+        (filters.departmentId.includes("water") && inc.department?.toLowerCase().includes("water")) ||
+        (filters.departmentId.includes("pwd") && (inc.department?.toLowerCase().includes("road") || inc.department?.toLowerCase().includes("pwd"))) ||
+        (filters.departmentId.includes("drainage") && (inc.department?.toLowerCase().includes("drainage") || inc.department?.toLowerCase().includes("sanitation"))) ||
+        (filters.departmentId.includes("electric") && (inc.department?.toLowerCase().includes("light") || inc.department?.toLowerCase().includes("electric")));
+      if (!matchDept) return false;
     }
     // 5. Assigned Officer
     if (filters.officerId && filters.officerId !== "ALL" && inc.assignedOfficerId !== filters.officerId) {
@@ -778,28 +352,29 @@ export function queryIncidents(filters?: IncidentFilterParams): MasterIncident[]
 
 /**
  * Calculates dynamic statistics over the queried incident records.
+ * Returns all 9 required metrics from actual records.
  * NEVER hardcodes counts.
  */
-export function computeDashboardStats(filters?: IncidentFilterParams): DashboardStats {
-  const incidents = queryIncidents(filters);
+export function computeDashboardStats(filters?: IncidentFilterParams, dataOverride?: MasterIncident[]): DashboardStats {
+  const incidents = queryIncidents(filters, dataOverride);
 
   // Total citizen reports across all master incidents
   const totalComplaints = incidents.reduce((sum, inc) => sum + (inc.complaintCount || inc.supportingReports.length), 0);
 
-  // Active Incidents: All master incidents that are not yet RESOLVED or CLOSED
-  const activeIncidents = incidents.filter((inc) => inc.status !== "RESOLVED" && inc.status !== "CLOSED").length;
+  // Active Incidents: All master incidents that are not yet RESOLVED or REJECTED or CLOSED
+  const activeIncidents = incidents.filter((inc) => inc.status !== "RESOLVED" && inc.status !== "REJECTED" && inc.status !== "CLOSED").length;
 
   // New Complaints: Incidents in SUBMITTED status and not assigned
   const newComplaints = incidents.filter((inc) => inc.status === "SUBMITTED" && !inc.assignedOfficerId).length;
 
   // Assigned Cases: Incidents with an assigned officer that are active
   const assignedCases = incidents.filter(
-    (inc) => Boolean(inc.assignedOfficerId) && inc.status !== "RESOLVED" && inc.status !== "CLOSED"
+    (inc) => Boolean(inc.assignedOfficerId) && inc.status !== "RESOLVED" && inc.status !== "REJECTED" && inc.status !== "CLOSED"
   ).length;
 
   // Unassigned Cases: Active incidents without an assigned officer
   const unassignedCases = incidents.filter(
-    (inc) => !inc.assignedOfficerId && inc.status !== "RESOLVED" && inc.status !== "CLOSED"
+    (inc) => !inc.assignedOfficerId && inc.status !== "RESOLVED" && inc.status !== "REJECTED" && inc.status !== "CLOSED"
   ).length;
 
   // Pending Cases: Incidents awaiting work (SUBMITTED, VALIDATING, ASSIGNED)
@@ -813,6 +388,9 @@ export function computeDashboardStats(filters?: IncidentFilterParams): Dashboard
   // Resolved Cases
   const resolvedCases = incidents.filter((inc) => inc.status === "RESOLVED" || inc.status === "CLOSED").length;
 
+  // Rejected Cases
+  const rejectedCases = incidents.filter((inc) => inc.status === "REJECTED").length;
+
   // Escalated Cases
   const escalatedCases = incidents.filter((inc) => inc.status === "ESCALATED").length;
 
@@ -822,9 +400,24 @@ export function computeDashboardStats(filters?: IncidentFilterParams): Dashboard
   // High Priority Cases
   const highPriorityCases = incidents.filter((inc) => inc.priority === "VERY_HIGH" || inc.priority === "HIGH").length;
 
-  // Total Supporting Reports (Total citizen complaints linked into incidents)
-  // e.g. If an incident has 25 reports, 24 of them are supporting clustered reports.
+  // Total Supporting Reports
   const totalSupportingReports = incidents.reduce((sum, inc) => sum + Math.max(0, inc.complaintCount - 1), 0);
+
+  // Average Resolution Hours from resolved incidents
+  let avgResolutionHours = 0;
+  const resolvedList = incidents.filter((inc) => inc.status === "RESOLVED" || inc.status === "CLOSED");
+  if (resolvedList.length > 0) {
+    const totalHours = resolvedList.reduce((sum, inc) => {
+      const start = inc.createdAtTimestamp || Date.now();
+      const end = inc.lastReportedTimestamp || Date.now();
+      const diffHours = Math.max(0.5, (end - start) / (1000 * 3600));
+      return sum + diffHours;
+    }, 0);
+    avgResolutionHours = Math.round((totalHours / resolvedList.length) * 10) / 10;
+  }
+
+  // Resolution Rate %
+  const resolutionRate = totalComplaints > 0 ? Math.round((resolvedCases / totalComplaints) * 100) : 0;
 
   return {
     totalComplaints,
@@ -835,17 +428,18 @@ export function computeDashboardStats(filters?: IncidentFilterParams): Dashboard
     pendingCases,
     inProgressCases,
     resolvedCases,
+    rejectedCases,
     escalatedCases,
     slaBreachedCases,
     highPriorityCases,
     totalSupportingReports,
+    avgResolutionHours,
+    resolutionRate,
   };
 }
 
 /**
  * Assigns an officer to a Master Incident.
- * Automatically updates:
- * Assigned Cases +1, Unassigned Cases -1.
  */
 export function assignOfficerToIncident(
   incidentId: string,
@@ -854,7 +448,7 @@ export function assignOfficerToIncident(
   author = "Admin Command"
 ): MasterIncident | null {
   const all = getStoredIncidents();
-  const target = all.find((i) => i.id === incidentId);
+  const target = all.find((i) => i.id === incidentId || i.incidentNumber === incidentId);
 
   if (!target) return null;
 
@@ -872,12 +466,42 @@ export function assignOfficerToIncident(
     author,
   });
 
-  target.routingAuditTrail.push({
-    level: "OFFICER",
-    entityName: officerName,
+  saveIncidents(all);
+  return target;
+}
+
+/**
+ * Overrides the priority of an incident with SLA adjustment and timeline entry.
+ */
+export function overrideIncidentPriority(
+  incidentId: string,
+  newPriority: ComplaintPriority,
+  reason: string,
+  author = "Admin Command"
+): MasterIncident | null {
+  const all = getStoredIncidents();
+  const target = all.find((i) => i.id === incidentId || i.incidentNumber === incidentId);
+
+  if (!target) return null;
+
+  const oldPriority = target.priority;
+  target.priority = newPriority;
+
+  // Recalculate SLA hours
+  const slaMap: Record<string, number> = {
+    VERY_HIGH: 4,
+    CRITICAL: 4,
+    HIGH: 12,
+    MEDIUM: 24,
+    LOW: 48,
+  };
+  target.slaHours = slaMap[newPriority] || 24;
+
+  target.timeline.push({
+    status: target.status,
     timestamp: "Just now",
-    method: "ADMIN_OVERRIDE",
-    details: `Allocated to ${officerName} by ${author}.`,
+    note: `Priority changed from ${oldPriority} to ${newPriority} by ${author}. Reason: ${reason || "Administrative review"}. SLA adjusted to ${target.slaHours}h.`,
+    author,
   });
 
   saveIncidents(all);
@@ -885,8 +509,7 @@ export function assignOfficerToIncident(
 }
 
 /**
- * Updates the status of an incident (e.g. Pending -> In Progress, In Progress -> Resolved, Escalated).
- * Automatically updates dashboard counts dynamically.
+ * Updates the status of an incident (e.g. Pending -> In Progress, In Progress -> Resolved, Escalated, Rejected).
  */
 export function updateIncidentStatus(
   incidentId: string,
@@ -895,7 +518,7 @@ export function updateIncidentStatus(
   author = "Admin Command"
 ): MasterIncident | null {
   const all = getStoredIncidents();
-  const target = all.find((i) => i.id === incidentId);
+  const target = all.find((i) => i.id === incidentId || i.incidentNumber === incidentId);
 
   if (!target) return null;
 
@@ -924,22 +547,7 @@ export function updateIncidentStatus(
 }
 
 /**
- * Core Clustering Ingestion:
  * Ingests a new citizen complaint report.
- * Evaluates against active open incidents using proximity, semantic similarity, and time window.
- *
- * If Match:
- * - Links to existing master incident.
- * - Increments complaintCount (+1).
- * - Appends to supportingReports.
- * - Recalculates priority.
- * - Supporting Reports +1, Total Complaints +1.
- * - Active Incidents count remains unchanged.
- *
- * If No Match:
- * - Creates brand new Master Incident.
- * - complaintCount = 1.
- * - Active Incidents +1.
  */
 export function ingestCitizenComplaint(input: {
   citizenName: string;
@@ -952,7 +560,7 @@ export function ingestCitizenComplaint(input: {
   channel?: CitizenReport["channel"];
 }): { incident: MasterIncident; isClustered: boolean; citizenReport: CitizenReport } {
   const all = getStoredIncidents();
-  const coords = input.coordinates || { lat: 16.7120, lng: 74.2380 }; // Default to central coordinates if missing
+  const coords = input.coordinates || { lat: 16.7120, lng: 74.2380 };
   const now = Date.now();
 
   const newReport: CitizenReport = {
@@ -970,7 +578,6 @@ export function ingestCitizenComplaint(input: {
     aiConfidence: 96,
   };
 
-  // Run Clustering Evaluation across open incidents
   let matchedIncident: MasterIncident | null = null;
   let highestMatchScore = 0;
 
@@ -992,23 +599,15 @@ export function ingestCitizenComplaint(input: {
     }
   }
 
-  // 1. MATCH FOUND: Clustered into existing Master Incident
   if (matchedIncident) {
     matchedIncident.complaintCount += 1;
     matchedIncident.lastReportedAt = "Just now";
     matchedIncident.lastReportedTimestamp = now;
     matchedIncident.supportingReports.push(newReport);
 
-    // Recalculate priority based on citizen volume
     const newPriority = recalculateIncidentPriority(matchedIncident.complaintCount, matchedIncident.priority);
     if (newPriority !== matchedIncident.priority) {
       matchedIncident.priority = newPriority;
-      matchedIncident.timeline.push({
-        status: matchedIncident.status,
-        timestamp: "Just now",
-        note: `Priority elevated to ${newPriority} due to ${matchedIncident.complaintCount} concurrent citizen complaints in immediate vicinity.`,
-        author: "AI Clustering Engine",
-      });
     }
 
     matchedIncident.timeline.push({
@@ -1026,7 +625,6 @@ export function ingestCitizenComplaint(input: {
     };
   }
 
-  // 2. NO MATCH: Create new Master Incident
   const newIncidentNumber = `INC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
   const newIncident: MasterIncident = {
     id: `inc-${Date.now().toString(36)}`,
@@ -1062,15 +660,7 @@ export function ingestCitizenComplaint(input: {
     aiConfidence: 95,
     aiSuggestedCategory: input.category,
     aiReasoning: "New unclustered civic issue detected. Dispatched to intake queue.",
-    routingAuditTrail: [
-      {
-        level: "DIVISION",
-        entityName: "Kolhapur Division",
-        timestamp: "Just now",
-        method: "AI_GEO_POLYGON",
-        details: "Assigned by geolocation clustering.",
-      },
-    ],
+    routingAuditTrail: [],
     timeline: [
       {
         status: "SUBMITTED",
@@ -1120,7 +710,7 @@ export function incidentToComplaint(inc: MasterIncident): Complaint {
     assignedOfficerId: inc.assignedOfficerId,
     citizenMobile: inc.supportingReports[0]?.citizenMobile || "+91 98220 00000",
     citizenName: inc.supportingReports[0]?.citizenName,
-    date: "2026-10-06",
+    date: new Date(inc.createdAtTimestamp).toISOString().split("T")[0],
     createdAt: inc.firstReportedAt,
     updatedAt: inc.lastReportedAt,
     imageUrl: inc.imageUrl,
@@ -1145,7 +735,6 @@ export function getCitizenComplaints(citizenMobile?: string): Complaint[] {
     return allIncidents.map(incidentToComplaint);
   }
 
-  // Find incidents matching this citizen's mobile
   const userIncidents = allIncidents.filter((inc) => {
     return inc.supportingReports.some((rep) => {
       const repClean = rep.citizenMobile.replace(/\D/g, "");
@@ -1153,16 +742,11 @@ export function getCitizenComplaints(citizenMobile?: string): Complaint[] {
     });
   });
 
-  // If new user has no complaints yet, provide top representative incidents so they can preview the live system
-  if (userIncidents.length === 0) {
-    return allIncidents.slice(0, 4).map(incidentToComplaint);
-  }
-
   return userIncidents.map(incidentToComplaint);
 }
 
 /**
- * Finds a Master Incident or Citizen Report by Tracking Number (e.g. CMP-1042 or INC-2026-1042)
+ * Finds a Master Incident or Citizen Report by Tracking Number
  */
 export function getIncidentOrComplaintByTracking(trackingNumber: string): {
   incident: MasterIncident;
@@ -1182,17 +766,6 @@ export function getIncidentOrComplaintByTracking(trackingNumber: string): {
     );
     if (matchedRep) {
       return { incident: inc, report: matchedRep, complaint: incidentToComplaint(inc) };
-    }
-  }
-
-  // Substring search
-  for (const inc of all) {
-    if (inc.incidentNumber.toUpperCase().includes(q)) {
-      return { incident: inc, complaint: incidentToComplaint(inc) };
-    }
-    const rep = inc.supportingReports.find((r) => r.trackingNumber.toUpperCase().includes(q));
-    if (rep) {
-      return { incident: inc, report: rep, complaint: incidentToComplaint(inc) };
     }
   }
 
@@ -1249,11 +822,10 @@ export function saveCitizenFeedback(
 }
 
 /**
- * Returns map-formatted incident items for Google Maps markers.
- * Exactly 1 marker per Master Incident with complaintCount (e.g. 25 reports = 1 marker).
+ * Returns map-formatted incident items for Mappls map markers.
  */
-export function getMapIncidents(filters?: IncidentFilterParams): MapIncidentItem[] {
-  const incidents = queryIncidents(filters);
+export function getMapIncidents(filters?: IncidentFilterParams, dataOverride?: MasterIncident[]): MapIncidentItem[] {
+  const incidents = queryIncidents(filters, dataOverride);
   return incidents.map((inc) => ({
     incidentId: inc.id,
     latitude: inc.coordinates.lat,
@@ -1287,8 +859,8 @@ export function getMapIncidents(filters?: IncidentFilterParams): MapIncidentItem
 /**
  * Groups nearby master incidents into geographic clusters for map overview.
  */
-export function getMapClusters(filters?: IncidentFilterParams): MapClusterItem[] {
-  const incidents = queryIncidents(filters);
+export function getMapClusters(filters?: IncidentFilterParams, dataOverride?: MasterIncident[]): MapClusterItem[] {
+  const incidents = queryIncidents(filters, dataOverride).filter((i) => i.coordinates.lat !== 0 && i.coordinates.lng !== 0);
   const clusters: MapClusterItem[] = [];
   const visited = new Set<string>();
 
@@ -1298,7 +870,6 @@ export function getMapClusters(filters?: IncidentFilterParams): MapClusterItem[]
     const clusterIncidents = [inc];
     visited.add(inc.id);
 
-    // Find all incidents within 1500 meters
     for (const other of incidents) {
       if (visited.has(other.id)) continue;
       const dist = calculateHaversineDistance(
@@ -1325,7 +896,6 @@ export function getMapClusters(filters?: IncidentFilterParams): MapClusterItem[]
       if (item.coordinates.lng < minLng) minLng = item.coordinates.lng;
     }
 
-    // Determine highest priority in cluster
     const hasVeryHigh = clusterIncidents.some((i) => i.priority === "VERY_HIGH");
     const hasHigh = clusterIncidents.some((i) => i.priority === "HIGH");
     const hasMedium = clusterIncidents.some((i) => i.priority === "MEDIUM");
@@ -1353,31 +923,39 @@ export function getMapClusters(filters?: IncidentFilterParams): MapClusterItem[]
 }
 
 /**
- * Computes geographic density hotspots from real database incidents and citizen reports.
- * Hotspots are dynamically generated based on volume of complaints in geographic proximity.
+ * Computes geographic density hotspots from real database incidents.
+ * PriorityScore formula: (Density * 2) + (HighPriority * 3) + (Unresolved * 2) + (Overdue * 4)
+ * High Risk: >= 15, Medium Risk: >= 8, Normal: < 8
  */
-export function getMapHotspots(filters?: IncidentFilterParams): MapHotspotItem[] {
-  const incidents = queryIncidents(filters);
+export function getMapHotspots(filters?: IncidentFilterParams, dataOverride?: MasterIncident[]): MapHotspotItem[] {
+  const incidents = queryIncidents(filters, dataOverride).filter((i) => i.coordinates.lat !== 0 && i.coordinates.lng !== 0);
   const hotspots: MapHotspotItem[] = [];
 
   for (const inc of incidents) {
-    // Only generate hotspots around notable complaint volumes (>= 3 complaints)
-    if (inc.complaintCount >= 3) {
+    const isHighPri = inc.priority === "HIGH" || inc.priority === "VERY_HIGH" ? 1 : 0;
+    const isUnresolved = inc.status !== "RESOLVED" && inc.status !== "CLOSED" ? 1 : 0;
+    const isOverdue = inc.isSlaBreached ? 1 : 0;
+    const density = inc.complaintCount;
+
+    // Documented priority score formula
+    const priorityScore = (density * 2) + (isHighPri * 3) + (isUnresolved * 2) + (isOverdue * 4);
+
+    if (priorityScore >= 8 || density >= 3) {
       let densityLevel: "CRITICAL" | "HIGH" | "MODERATE" = "MODERATE";
       let color = "rgba(15, 118, 110, 0.22)";
       let borderColor = "#0F766E";
-      let radiusMeters = 180;
+      let radiusMeters = 200;
 
-      if (inc.complaintCount >= 15) {
+      if (priorityScore >= 15) {
         densityLevel = "CRITICAL";
         color = "rgba(220, 38, 38, 0.24)";
         borderColor = "#DC2626";
-        radiusMeters = 350;
-      } else if (inc.complaintCount >= 6) {
+        radiusMeters = 400;
+      } else if (priorityScore >= 8) {
         densityLevel = "HIGH";
         color = "rgba(245, 158, 11, 0.24)";
         borderColor = "#F59E0B";
-        radiusMeters = 250;
+        radiusMeters = 300;
       }
 
       hotspots.push({

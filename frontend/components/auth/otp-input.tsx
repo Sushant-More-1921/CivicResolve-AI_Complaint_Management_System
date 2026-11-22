@@ -127,14 +127,14 @@ export function OtpInput({
             aria-label={`Digit ${index + 1} of ${length}`}
             className={cn(
               "w-11 h-13 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-bold rounded-lg border transition-all duration-150 select-none",
-              "focus:outline-none focus:ring-2 focus:ring-offset-1",
+              "focus:outline-none focus:ring-2 focus:ring-offset-1 dark:focus:ring-offset-[#0B0F17]",
               disabled
-                ? "bg-[#F1F5F9] text-[#94A3B8] border-[#E2E8F0] cursor-not-allowed"
+                ? "bg-[#F1F5F9] dark:bg-[#1E293B] text-[#94A3B8] dark:text-[#64748B] border-[#E2E8F0] dark:border-[#2D3748] cursor-not-allowed"
                 : hasError
-                ? "border-[#DC2626] bg-[#FEF2F2] text-[#DC2626] focus:ring-[#FECACA] focus:border-[#DC2626] animate-[shake_0.25s_ease-in-out]"
+                ? "border-[#DC2626] dark:border-[#DC2626] bg-[#FEF2F2] dark:bg-[#7F1D1D]/20 text-[#DC2626] dark:text-[#F87171] focus:ring-[#FECACA] dark:focus:ring-[#DC2626]/30 focus:border-[#DC2626] animate-[shake_0.25s_ease-in-out]"
                 : isFilled
-                ? "border-[#0B4EA2] bg-[#EAF2FF]/30 text-[#0F172A] focus:ring-[#EAF2FF] focus:border-[#0B4EA2]"
-                : "border-[#CBD5E1] bg-white text-[#0F172A] hover:border-[#94A3B8] focus:border-[#0B4EA2] focus:ring-[#EAF2FF]"
+                ? "border-[#0B4EA2] dark:border-[#3B82F6] bg-[#EAF2FF]/30 dark:bg-[#1E3A8A]/30 text-[#0F172A] dark:text-[#F8FAFC] focus:ring-[#EAF2FF] dark:focus:ring-[#1E3A8A]/30 focus:border-[#0B4EA2] dark:focus:border-[#3B82F6]"
+                : "border-[#CBD5E1] dark:border-[#2D3748] bg-white dark:bg-[#111827] text-[#0F172A] dark:text-[#F8FAFC] hover:border-[#94A3B8] dark:hover:border-[#4B5563] focus:border-[#0B4EA2] dark:focus:border-[#3B82F6] focus:ring-[#EAF2FF] dark:focus:ring-[#1E3A8A]/30"
             )}
           />
         );
